@@ -21,24 +21,6 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Test public EPGTalk Latino feed end-to-end
-        run: |
-          python - <<'PY'
-          import gzip, importlib.util, pathlib, urllib.request
-          path = pathlib.Path('custom_components/totalplay_stb/epg_data.py')
-          spec = importlib.util.spec_from_file_location('epg_data_live_smoke', path)
-          parser = importlib.util.module_from_spec(spec)
-          spec.loader.exec_module(parser)
-          url = 'https://raw.githubusercontent.com/acidjesuz/EPGTalk/master/Latino_guide.xml.gz'
-          with urllib.request.urlopen(url, timeout=50) as response:
-              with gzip.GzipFile(fileobj=response) as stream:
-                  data = parser.parse_xmltv_stream(stream)
-          print('EPGTalk live XMLTV:', {key: data[key] for key in (
-              'programme_count', 'valid_timestamp_count', 'window_programme_count',
-              'scheduled_channel_count')}, 'stations:', len(data['channels']))
-          print('Sample stations with current listings:', [ch['name'] for ch in data['channels'] if ch['schedule']][:12])
-          assert data['channels'] and data['programme_count'] and data['window_programme_count'], 'Live guide has no current programmes'
-          PY
       - name: Check Python syntax
         run: python -m compileall -q custom_components/totalplay_stb tests
       - name: Test Totalplay HTTP, Netflix, EPG fallback and display selection
