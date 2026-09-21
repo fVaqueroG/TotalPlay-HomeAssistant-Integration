@@ -1,7 +1,7 @@
-/* Totalplay frontend v0.3.6: make the IPTV guide occupy the available card space. */
-import './totalplay-pages-remote.js?v=0.3.6';
+/* Totalplay frontend layout: make the IPTV guide occupy the available card space. */
+import './totalplay-pages-remote.js?v=0.3.7';
 
-const TP_LAYOUT_CARD_VERSION = '0.3.6';
+const TP_LAYOUT_CARD_VERSION = '0.3.7';
 const Card = customElements.get('totalplay-stb-card');
 if (!Card) throw new Error('Totalplay guide card was not registered');
 
