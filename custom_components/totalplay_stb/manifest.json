@@ -1,0 +1,12 @@
+{
+  "domain": "totalplay_stb",
+  "name": "Totalplay STB Local Remote",
+  "codeowners": ["@fVaqueroG"],
+  "config_flow": true,
+  "documentation": "https://github.com/fVaqueroG/TotalPlay-HomeAssistant-Integration#readme",
+  "issue_tracker": "https://github.com/fVaqueroG/TotalPlay-HomeAssistant-Integration/issues",
+  "integration_type": "device",
+  "iot_class": "assumed_state",
+  "requirements": [],
+  "version": "0.1.0"
+}
