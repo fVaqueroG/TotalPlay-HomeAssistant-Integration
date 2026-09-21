@@ -1,6 +1,5 @@
-"""Verify the confirmed Netflix launch sequence without a running Home Assistant."""
+"""Verify Netflix launch and attached-TV input handling without running HA."""
 
-import asyncio
 from enum import Enum
 import importlib.util
 from pathlib import Path
@@ -69,8 +68,19 @@ spec.loader.exec_module(player_module)
 
 class NetflixLaunchTests(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):
-        entry = types.SimpleNamespace(data={"host": "127.0.0.1", "port": 80})
-        self.player = player_module.TotalplayMediaPlayer(entry)
+        self.tv_entity = "media_player.living_room_tv"
+        self.entry = types.SimpleNamespace(
+            data={"host": "127.0.0.1", "port": 80},
+            options={"tv_entity": self.tv_entity, "tv_source": "HDMI 2"},
+        )
+        self.tv_state = types.SimpleNamespace(
+            state="on", attributes={"source": "HDMI 2", "source_list": ["HDMI 1", "HDMI 2"]}
+        )
+        self.hass = types.SimpleNamespace(
+            states=types.SimpleNamespace(get=lambda eid: self.tv_state if eid == self.tv_entity else None),
+            services=types.SimpleNamespace(async_call=AsyncMock()),
+        )
+        self.player = player_module.TotalplayMediaPlayer(self.hass, self.entry)
 
     async def test_netflix_sends_333_then_waits_then_ok(self):
         events = []
@@ -98,7 +108,26 @@ class NetflixLaunchTests(unittest.IsolatedAsyncioTestCase):
                 ("key", "ok"),
             ],
         )
+        self.hass.services.async_call.assert_not_awaited()
         self.assertEqual(self.player.extra_state_attributes["last_requested_channel"], "333")
+
+    async def test_different_source_selected_only_once(self):
+        self.tv_state.attributes["source"] = "HDMI 1"
+        with patch.object(player_module, "async_send_key", new_callable=AsyncMock) as sender, patch.object(
+            player_module.asyncio, "sleep", new_callable=AsyncMock
+        ):
+            await self.player.async_play_media("channel", "101")
+        self.hass.services.async_call.assert_awaited_once_with(
+            "media_player", "select_source",
+            {"entity_id": self.tv_entity, "source": "HDMI 2"}, blocking=True,
+        )
+        self.assertEqual([args.args[2] for args in sender.await_args_list], ["1", "0", "1"])
+
+    async def test_unknown_source_never_switches_blindly(self):
+        self.tv_state.attributes.pop("source")
+        with patch.object(player_module, "async_send_key", new_callable=AsyncMock):
+            await self.player.async_play_media("channel", "101")
+        self.hass.services.async_call.assert_not_awaited()
 
     async def test_regular_channel_still_sends_digits_without_ok(self):
         sender = AsyncMock()
@@ -107,6 +136,7 @@ class NetflixLaunchTests(unittest.IsolatedAsyncioTestCase):
         ):
             await self.player.async_play_media("channel", "101")
         self.assertEqual([args.args[2] for args in sender.await_args_list], ["1", "0", "1"])
+        self.hass.services.async_call.assert_not_awaited()
 
     async def test_unsupported_app_cannot_trigger_arbitrary_commands(self):
         with patch.object(player_module, "async_send_key", new_callable=AsyncMock) as sender:
