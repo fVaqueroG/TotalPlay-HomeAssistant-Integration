@@ -20,6 +20,7 @@ from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .const import DOMAIN
+from .display import async_ensure_display_source, configured_display
 from .http import async_send_key
 
 # Confirmed on the owner's DIW362 UHD: channel 333 shows a Netflix launch
@@ -33,7 +34,7 @@ async def async_setup_entry(
     hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback
 ) -> None:
     """Create a media player alongside the remote entity."""
-    async_add_entities([TotalplayMediaPlayer(entry)])
+    async_add_entities([TotalplayMediaPlayer(hass, entry)])
 
 
 class TotalplayMediaPlayer(MediaPlayerEntity):
@@ -53,7 +54,9 @@ class TotalplayMediaPlayer(MediaPlayerEntity):
         | MediaPlayerEntityFeature.STOP
     )
 
-    def __init__(self, entry: ConfigEntry) -> None:
+    def __init__(self, hass: HomeAssistant, entry: ConfigEntry) -> None:
+        self._hass = hass
+        self._entry = entry
         self._host = entry.data[CONF_HOST]
         self._port = entry.data[CONF_PORT]
         self._last_requested_channel: str | None = None
@@ -70,8 +73,13 @@ class TotalplayMediaPlayer(MediaPlayerEntity):
 
     @property
     def extra_state_attributes(self) -> dict[str, str | None]:
-        """Show the last requested channel, not an unverified current channel."""
-        return {"last_requested_channel": self._last_requested_channel}
+        """Show requested channel and configured connection, not inferred TV state."""
+        tv_entity, tv_source = configured_display(self._entry)
+        return {
+            "last_requested_channel": self._last_requested_channel,
+            "connected_tv_entity": tv_entity or None,
+            "connected_tv_source": tv_source or None,
+        }
 
     async def _send_keys(self, keys: list[str]) -> None:
         """Send keys sequentially, tolerating the STB's invalid HTTP headers."""
@@ -90,10 +98,12 @@ class TotalplayMediaPlayer(MediaPlayerEntity):
 
     async def async_media_next_track(self) -> None:
         async with self._command_lock:
+            await async_ensure_display_source(self._hass, self._entry)
             await self._send_keys(["channel_up"])
 
     async def async_media_previous_track(self) -> None:
         async with self._command_lock:
+            await async_ensure_display_source(self._hass, self._entry)
             await self._send_keys(["channel_down"])
 
     async def async_media_stop(self) -> None:
@@ -111,6 +121,7 @@ class TotalplayMediaPlayer(MediaPlayerEntity):
             if str(media_id).strip().casefold() != "netflix":
                 raise HomeAssistantError("Only the Netflix app has a confirmed launch sequence")
             async with self._command_lock:
+                await async_ensure_display_source(self._hass, self._entry)
                 await self._send_keys(list(_NETFLIX_CHANNEL))
                 # An immediate OK can be ignored while the launch channel loads.
                 await asyncio.sleep(_NETFLIX_LAUNCH_WAIT_SECS)
@@ -127,6 +138,7 @@ class TotalplayMediaPlayer(MediaPlayerEntity):
         if re.fullmatch(r"[0-9]{1,4}", channel) is None or int(channel) == 0:
             raise HomeAssistantError("Channel must be a number between 1 and 9999")
         async with self._command_lock:
+            await async_ensure_display_source(self._hass, self._entry)
             await self._send_keys(list(channel))
             self._last_requested_channel = channel
             self.async_write_ha_state()
