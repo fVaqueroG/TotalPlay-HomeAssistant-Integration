@@ -1,4 +1,4 @@
-"""Test EPG provider fallback, compressed XMLTV and diagnostics without HA/network."""
+"""Test EPG provider fallback, large compressed XMLTV and diagnostics without HA/network."""
 import gzip
 import importlib.util
 from datetime import datetime, timedelta, timezone
@@ -56,6 +56,20 @@ CURRENT = {'channels':[{'id':'one','name':'Channel','schedule':[]}],
            'programme_count':3,'window_programme_count':1,'updated':'2026-09-21T18:00:00+00:00'}
 
 class EpgFallbackTests(unittest.IsolatedAsyncioTestCase):
+    async def test_github_latino_guide_preferred_when_current(self):
+        self.assertIn('raw.githubusercontent.com', epg.GUIDE_URL)
+        self.assertIn('Latino_guide.xml.gz', epg.GUIDE_URL)
+        view = epg.TotalplayGuideView(SimpleNamespace())
+        attempted = []
+        async def download(url):
+            attempted.append(url)
+            return CURRENT
+        view._download = download
+        await view._refresh()
+        self.assertEqual(attempted, [epg.GUIDE_URL])
+        self.assertEqual(view._guide['source_name'], 'EPGTalk Latino / Mexico')
+        self.assertIsNone(view._guide['error'])
+
     async def test_primary_http_error_uses_backup(self):
         view = epg.TotalplayGuideView(SimpleNamespace())
         attempted = []
@@ -70,7 +84,7 @@ class EpgFallbackTests(unittest.IsolatedAsyncioTestCase):
         self.assertIsNone(view._guide['error'])
         self.assertTrue(view._guide['fallback'])
         self.assertEqual(view._guide['source'], epg.BACKUP_GUIDE_URL)
-        self.assertEqual(view._guide['source_name'], 'IPTV-EPG Mexico')
+        self.assertEqual(view._guide['source_name'], 'EPGshare Mexico MX1')
 
     async def test_stale_primary_tries_backup(self):
         view = epg.TotalplayGuideView(SimpleNamespace())
@@ -94,7 +108,7 @@ class EpgFallbackTests(unittest.IsolatedAsyncioTestCase):
         view._download = download
         await view._refresh()
         self.assertEqual(attempted, list(epg.GUIDE_SOURCES))
-        self.assertEqual(view._guide['source_name'], 'IPTV-org Mexico')
+        self.assertEqual(view._guide['source_name'], 'IPTV-EPG Mexico')
         self.assertEqual(len(view._guide['source_errors']), 2)
         self.assertIsNone(view._guide['error'])
 
@@ -115,24 +129,38 @@ class EpgFallbackTests(unittest.IsolatedAsyncioTestCase):
         self.assertNotIn('private backend detail', view._guide['error'])
         self.assertGreater(view._next_refresh, time.monotonic())
 
-    def test_compressed_mx1_xmltv_is_decoded_into_programmes(self):
+    def _sample_xml(self):
         now = datetime.now(timezone.utc)
         start = (now - timedelta(minutes=20)).strftime('%Y%m%d%H%M%S +0000')
         end = (now + timedelta(minutes=40)).strftime('%Y%m%d%H%M%S +0000')
-        xml = (f'<tv><channel id="ESPN.mx"><display-name>ESPN</display-name></channel>'
-               f'<programme channel="ESPN.mx" start="{start}" stop="{end}">'
-               f'<title>Live sports</title></programme></tv>').encode()
+        return (f'<tv><channel id="ESPN.mx"><display-name>ESPN</display-name></channel>'
+                f'<programme channel="ESPN.mx" start="{start}" stop="{end}">'
+                f'<title>Live sports</title></programme></tv>').encode()
+
+    def test_gzip_and_plain_xmltv_both_decode(self):
+        xml = self._sample_xml()
         for payload in (xml, gzip.compress(xml)):
             parsed = epg._parse_guide_bytes(payload)
             self.assertEqual(parsed['window_programme_count'], 1)
             self.assertEqual(parsed['channels'][0]['schedule'][0]['title'], 'Live sports')
 
-    def test_compressed_guide_cannot_exceed_uncompressed_limit(self):
-        with patch.object(epg, 'MAX_GUIDE_BYTES', 256):
+    def test_streamed_gzip_exceeds_original_plain_xml_limit(self):
+        xml = self._sample_xml().replace(b'</tv>', b'<padding>' + b'X' * 24000 + b'</padding></tv>')
+        with patch.object(epg, 'MAX_GUIDE_BYTES', 1024):
+            parsed = epg._parse_guide_bytes(gzip.compress(xml))
+        self.assertEqual(parsed['window_programme_count'], 1)
+
+    def test_streamed_xmltv_cannot_exceed_expanded_limit(self):
+        with patch.object(epg, 'MAX_EXPANDED_GUIDE_BYTES', 256):
             with self.assertRaisesRegex(ValueError, 'Uncompressed guide exceeds'):
-                epg._parse_guide_bytes(gzip.compress(b'A' * 257))
+                epg._parse_guide_bytes(gzip.compress(b'A' * 1024))
             with self.assertRaisesRegex(ValueError, 'Invalid compressed'):
                 epg._parse_guide_bytes(b'\x1f\x8bnot a valid gzip file')
+
+    def test_streamed_xmltv_rejects_doctype(self):
+        xml = b'<?xml version="1.0"?><!DOCTYPE tv [<!ENTITY x "bad">]><tv></tv>'
+        with self.assertRaisesRegex(ValueError, 'forbidden DTD'):
+            epg._parse_guide_bytes(gzip.compress(xml))
 
 if __name__ == '__main__':
     unittest.main()
