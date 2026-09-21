@@ -1,0 +1,27 @@
+/* Run without Home Assistant or third-party test dependencies. */
+const assert=require('node:assert/strict');
+const fs=require('node:fs');
+const vm=require('node:vm');
+const path=require('node:path');
+const source=fs.readFileSync(path.join(__dirname,'../custom_components/totalplay_stb/www/totalplay-guide-v3.js'),'utf8');
+const types=new Map();
+const sandbox={HTMLElement:class{},window:{innerWidth:1200,customCards:[]},customElements:{get:name=>types.get(name),define:(name,cls)=>types.set(name,cls)},console};
+vm.createContext(sandbox);
+vm.runInContext(source,sandbox,{filename:'totalplay-guide-v3.js'});
+const match=vm.runInContext('tpMatch',sandbox);
+const schedule=vm.runInContext('tpSchedules',sandbox);
+const players=vm.runInContext('tpPlayers',sandbox);
+assert.equal(typeof types.get('totalplay-stb-card'), 'function');
+assert.equal(typeof types.get('totalplay-stb-card-editor'), 'function');
+assert.equal(sandbox.window.customCards.filter(c=>c.type==='totalplay-stb-card').length,1);
+const guide={channels:[{id:'Canal5.mx',name:'Canal 5 HD',schedule:[{title:'Now',start:'2026-09-21T15:00:00Z',stop:'2026-09-21T16:00:00Z'}]},{id:'Discovery.mx',name:'Discovery HD',schedule:[]}]};
+assert.equal(match(guide,{name:'Canal 5'}).id,'Canal5.mx');
+assert.equal(match(guide,{name:'Different name',epg_id:'Discovery.mx'}).id,'Discovery.mx');
+assert.equal(match(guide,{name:'Nonexistent'}),null);
+assert.equal(schedule(guide.channels[0],Date.parse('2026-09-21T15:15:00Z'),Date.parse('2026-09-21T16:30:00Z')).length,1);
+assert.equal(schedule(guide.channels[0],Date.parse('2026-09-21T16:00:00Z'),Date.parse('2026-09-21T17:00:00Z')).length,0);
+assert.equal(players({states:{'media_player.tv':{attributes:{}},'media_player.totalplay':{attributes:{last_requested_channel:null}}}}).length,1);
+assert.match(source,/media_content_type:type,media_content_id:String\(number\)/);
+assert.match(source,/totalplay_stb\/epg/);
+assert.match(source,/Save EPG mapping/);
+console.log('PASS: v3 card picker, guide match, schedule windows, entity selector, service routing, editor mapping');
