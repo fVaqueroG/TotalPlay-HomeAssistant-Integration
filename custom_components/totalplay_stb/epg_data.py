@@ -1,16 +1,25 @@
-"""Pure XMLTV parsing for the optional Totalplay programme guide.
+"""Pure, bounded XMLTV parsing for the optional Totalplay programme guide.
 
-Upstream XMLTV station IDs are NOT Totalplay channel numbers.
+Upstream station IDs are NOT Totalplay channel numbers.
 """
 
 from datetime import datetime, timezone, timedelta
 import io
+import re
 import xml.etree.ElementTree as ET
 
 MAX_GUIDE_BYTES = 25_000_000
 MAX_STREAMED_XMLTV_BYTES = 160_000_000
 MAX_CHANNELS = 1000
 MAX_PROGRAMMES = 150_000
+
+# EPGTalk's Latino guide starts with <!DOCTYPE tv SYSTEM "xmltv.dtd">.
+# Remove only this exact, inert XMLTV declaration before the XML parser sees
+# it. We never resolve the referenced DTD, nor accept internal entity subsets.
+_SAFE_XMLTV_DOCTYPE = re.compile(
+    rb'<!DOCTYPE\s+tv\s+SYSTEM\s+(["\'])xmltv\.dtd\1\s*>', re.IGNORECASE
+)
+_ROOT_OPEN = re.compile(rb'<tv(?:\s|>)', re.IGNORECASE)
 
 
 def _when(value: str) -> datetime | None:
@@ -36,37 +45,77 @@ def parse_xmltv(data: bytes, now: datetime | None = None) -> dict:
 
 
 class _LimitedXmlReader:
-    """Reject oversize/DTD XML while reading small chunks, without full inflation."""
+    """Cap streamed XML size; accept one inert DTD and reject entity declarations.
+
+    Buffer at most 8 KiB of XML preamble so an allowed declaration can be
+    removed even when the underlying source returns very short read chunks.
+    After the root begins, never accept additional DTD/ENTITY declarations.
+    """
 
     def __init__(self, source, max_bytes: int):
         self._source = source
         self._max_bytes = max_bytes
         self._count = 0
+        self._ready = False
+        self._carry = b""
         self._tail = b""
 
-    def read(self, size: int = -1) -> bytes:
-        if size < 0:
-            size = 16384
-        # An extra byte detects over-limit data rather than silently truncating.
+    def _bounded_read(self, size: int) -> bytes:
         remaining = self._max_bytes - self._count
         chunk = self._source.read(min(size, max(0, remaining) + 1))
         self._count += len(chunk)
         if self._count > self._max_bytes:
             raise ValueError("Uncompressed guide exceeds the XMLTV size limit")
+        return chunk
+
+    def read(self, size: int = -1) -> bytes:
+        if size < 0:
+            size = 16384
+        if not size:
+            return b""
+        if self._carry:
+            chunk, self._carry = self._carry[:size], self._carry[size:]
+            return chunk
+
+        if not self._ready:
+            preamble = bytearray()
+            while not _ROOT_OPEN.search(preamble):
+                chunk = self._bounded_read(4096)
+                if not chunk:
+                    break
+                preamble.extend(chunk)
+                if len(preamble) > 8192:
+                    raise ValueError("XMLTV preamble is too large")
+            data = bytes(preamble)
+            lower = data.lower()
+            if b"<!entity" in lower:
+                raise ValueError("XMLTV document contains a forbidden entity declaration")
+            if b"<!doctype" in lower:
+                match = _SAFE_XMLTV_DOCTYPE.search(data)
+                if (match is None or match.start() >= (_ROOT_OPEN.search(data) or match).start()
+                        or b"<!doctype" in (data[:match.start()] + data[match.end():]).lower()):
+                    raise ValueError("XMLTV document contains a forbidden DTD")
+                # Strip the external DTD *reference*, without fetching or parsing it.
+                data = data[:match.start()] + data[match.end():]
+            self._ready = True
+            self._tail = data[-16:].lower()
+            self._carry = data[size:]
+            return data[:size]
+
+        chunk = self._bounded_read(size)
         scan = (self._tail + chunk).lower()
         if b"<!doctype" in scan or b"<!entity" in scan:
-            raise ValueError("XMLTV document contains a forbidden DTD")
+            raise ValueError("XMLTV document contains a forbidden DTD or entity declaration")
         self._tail = scan[-16:]
         return chunk
 
 
 def parse_xmltv_stream(source, now: datetime | None = None,
                        max_bytes: int = MAX_STREAMED_XMLTV_BYTES) -> dict:
-    """Stream an XMLTV file, clearing processed nodes to bound memory usage.
+    """Stream XMLTV and clear processed nodes to bound memory usage.
 
-    Large multi-day XMLTV sources can exceed the original 25 MB limit after
-    gzip decompression; only programmes overlapping the next eight hours are
-    retained. Unknown station IDs are never mistaken for Totalplay numbers.
+    Multi-day XMLTV files can exceed the original 25 MB limit after gzip
+    decompression; retain only programmes overlapping the next eight hours.
     """
     now = (now or datetime.now(timezone.utc)).astimezone(timezone.utc)
     end = now + timedelta(hours=8)
