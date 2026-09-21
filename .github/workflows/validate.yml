@@ -32,7 +32,9 @@ jobs:
           node --input-type=module --check < custom_components/totalplay_stb/www/totalplay-epg-responsive.js
           node --input-type=module --check < custom_components/totalplay_stb/www/totalplay-pages-remote.js
           node --input-type=module --check < custom_components/totalplay_stb/www/totalplay-guide-layout-v036.js
-      - name: Test IPTV guide, EPG mapping, scrolling, pages and layout
+          node --input-type=module --check < custom_components/totalplay_stb/www/totalplay-app-logos.js
+          node --input-type=module --check < custom_components/totalplay_stb/www/totalplay-stb-v037.js
+      - name: Test IPTV guide, EPG mapping, scrolling, pages, layout and logos
         run: |
           node tests/test_card_guide.js
           node tests/test_guide_v3.cjs
@@ -40,5 +42,6 @@ jobs:
           node tests/test_guide_autoscroll.cjs
           node tests/test_pages_remote.cjs
           node tests/test_guide_layout.cjs
+          node tests/test_app_logos.cjs
       - name: Validate with hassfest
         uses: home-assistant/actions/hassfest@master
