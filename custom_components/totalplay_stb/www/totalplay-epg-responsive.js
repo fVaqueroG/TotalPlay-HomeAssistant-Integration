@@ -1,6 +1,7 @@
-/* Totalplay guide enhancements: retain the original card, editor, and service routing. */
+/* Totalplay card frontend v0.3.4: guide, scroll, and EPG enhancements. */
 import './totalplay-guide-v3.js';
 
+const TP_CARD_VERSION = '0.3.4';
 const TotalplayCard = customElements.get('totalplay-stb-card');
 if (!TotalplayCard) throw new Error('Totalplay base card failed to load');
 
@@ -14,7 +15,6 @@ const ALIASES = Object.freeze({
   historychannel: 'history', history: 'history',
   aande: 'ae', aeteve: 'ae',
 });
-
 function guideKey(value) {
   const text = String(value || '').normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '').toLowerCase()
@@ -23,29 +23,23 @@ function guideKey(value) {
     .replace(/[^a-z0-9]/g, '');
   return ALIASES[text] || text;
 }
-
 function stationKeys(station) {
   return new Set([station?.name, ...(station?.names || []), String(station?.id || '').split('.')[0]]
     .map(guideKey).filter(Boolean));
 }
-
 function findStation(guide, channel) {
   if (!guide?.channels?.length || !channel) return null;
-  // A hand-picked station is authoritative. Do not replace it with a guess.
   if (channel.epg_id) return guide.channels.find(s => s.id === channel.epg_id) || null;
   const wanted = new Set([channel.epg_name, channel.name].map(guideKey).filter(Boolean));
   if (!wanted.size) return null;
   const candidates = guide.channels.filter(station =>
     [...stationKeys(station)].some(key => wanted.has(key)));
   if (candidates.length === 1) return candidates[0];
-  // Never map two similarly named stations arbitrarily. Use guide activity
-  // only if exactly one of the ambiguous stations actually has programmes.
   const scheduled = candidates.filter(station => (station.schedule || []).some(program =>
     Number.isFinite(Date.parse(program.start)) && Number.isFinite(Date.parse(program.stop)) &&
     Date.parse(program.stop) > Date.now() && Date.parse(program.start) < Date.now() + 7200000));
   return scheduled.length === 1 ? scheduled[0] : null;
 }
-
 const originalChannels = TotalplayCard.prototype._channels;
 TotalplayCard.prototype._channels = function () {
   return originalChannels.call(this).map(channel => {
@@ -55,14 +49,34 @@ TotalplayCard.prototype._channels = function () {
   });
 };
 
+// If a short first batch does not fill the viewport, render another batch.
+// Schedule after layout, never in a tight synchronous loop; stop when all
+// filtered channels are visible or a real scrolling region exists.
+TotalplayCard.prototype._queueGuideFill = function () {
+  if (this._guideFillQueued || !this._guideHasMore || this._tab !== 'guide' ||
+      !this._scroll || typeof requestAnimationFrame !== 'function') return;
+  this._guideFillQueued = true;
+  requestAnimationFrame(() => {
+    this._guideFillQueued = false;
+    const scroll = this._scroll;
+    if (!scroll || this._tab !== 'guide' || !this._guideHasMore || this._autoGrowing ||
+        !scroll.clientHeight || scroll.scrollHeight > scroll.clientHeight + 100) return;
+    this._autoGrowing = true;
+    try {
+      this._limit += 35;
+      this._renderGuide();
+    } finally {
+      this._autoGrowing = false;
+    }
+  });
+};
 const originalRenderGuide = TotalplayCard.prototype._renderGuide;
 TotalplayCard.prototype._renderGuide = function () {
   originalRenderGuide.call(this);
-  // The base renderer determines whether filtered rows remain. Keep its count,
-  // but replace its manual Show more button with scroll-driven pagination.
   this._guideHasMore = Boolean(this._more && !this._more.hidden);
   if (this._more) this._more.hidden = true;
   if (this._backToTop && this._scroll) this._backToTop.hidden = this._scroll.scrollTop < 240;
+  this._queueGuideFill();
   if (!this._guideStatus || !this._guide || this._guide.error || !this._config?.epg) return;
   const guide = this._guide;
   const activeStations = guide.channels.filter(station => (station.schedule || []).some(program =>
@@ -84,8 +98,6 @@ TotalplayCard.prototype._renderGuide = function () {
   }
 };
 
-// Keep the guide in the available viewport and let its timeline scroll within
-// the card. Opening the remote does not increase the height of the guide.
 const RESPONSIVE_CSS = `
 :host {display:block; min-height:0}
 ha-card {height:min(760px,max(280px,calc(100dvh - 175px))); display:flex; flex-direction:column; overflow:hidden}
@@ -97,9 +109,11 @@ ha-card {height:min(760px,max(280px,calc(100dvh - 175px))); display:flex; flex-d
 .main>section.apps-only:not(.hidden) {display:block; flex:1; min-height:0; overflow:auto}
 .guide-info,.selection,.apps-strip,.showmore {flex:none}
 .guide-info {max-height:78px; overflow:auto; align-items:flex-start}
-.guide-scroll {flex:1; min-height:68px; max-height:none!important; overflow:auto}
+.guide-scroll {flex:1 1 0; height:0; min-height:68px; max-height:none!important; overflow-x:auto; overflow-y:auto; touch-action:pan-x pan-y; -webkit-overflow-scrolling:touch; overscroll-behavior:contain}
 .showmore {display:none!important}
 .tp-back-to-top {white-space:nowrap;flex:none;font-size:12px;padding:6px 10px}
+.brand-title {display:flex; align-items:center; gap:7px; overflow:visible; white-space:normal}
+.tp-version-badge {display:inline-flex; flex:none; align-items:center; border:1px solid var(--tp-line); border-radius:7px; padding:2px 6px; color:var(--tp-sub); background:color-mix(in srgb,var(--tp-ink) 7%,var(--tp-bg)); font-size:10px; font-weight:650; white-space:nowrap; letter-spacing:0}
 .remote {min-height:0; max-height:100%; overflow:auto}
 @media(max-width:1100px) {
   .layout.remote-visible {display:block; position:relative; grid-template-columns:none}
@@ -113,9 +127,11 @@ ha-card {height:min(760px,max(280px,calc(100dvh - 175px))); display:flex; flex-d
   .pills {max-height:43px}
 }
 `;
-
 const originalSetConfig = TotalplayCard.prototype.setConfig;
 TotalplayCard.prototype.setConfig = function (config) {
+  // Show the full channel list by default. An EPG-only filter can hide nearly
+  // every channel when the feed is unavailable, leaving nothing to scroll.
+  if (this._onlyGuide === undefined) this._onlyGuide = Boolean(config?.programs_only ?? false);
   originalSetConfig.call(this, config);
   if (this.shadowRoot && !this.shadowRoot.querySelector('#totalplay-responsive-epg')) {
     const style = document.createElement('style');
@@ -123,8 +139,14 @@ TotalplayCard.prototype.setConfig = function (config) {
     style.textContent = RESPONSIVE_CSS;
     this.shadowRoot.appendChild(style);
   }
-  // setConfig rebuilds the guide node. Bind once per node, including when the
-  // visual editor rebuilds the card, without attaching duplicate listeners.
+  const heading = this.shadowRoot?.querySelector('.brand-title');
+  if (heading && !heading.querySelector('.tp-version-badge')) {
+    const badge = document.createElement('span');
+    badge.className = 'tp-version-badge';
+    badge.textContent = `Card v${TP_CARD_VERSION}`;
+    badge.title = 'Version of the Totalplay card JavaScript loaded in this browser';
+    heading.appendChild(badge);
+  }
   const scroll = this._scroll;
   if (!scroll || this._autoScrollNode === scroll) return;
   this._autoScrollNode = scroll;
@@ -149,9 +171,10 @@ TotalplayCard.prototype.setConfig = function (config) {
     this._autoGrowing = true;
     try {
       this._limit += 35;
-      this._renderGuide(); // The base card restores both scrollTop and scrollLeft.
+      this._renderGuide();
     } finally {
       this._autoGrowing = false;
     }
   }, {passive: true});
+  this._queueGuideFill();
 };
