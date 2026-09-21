@@ -114,6 +114,7 @@ class TotalplayPlayerTests(unittest.IsolatedAsyncioTestCase):
         ])
         self.hass.services.async_call.assert_not_awaited()
         self.assertEqual(self.player.extra_state_attributes["last_requested_channel"], "333")
+        self.assertEqual(self.player.extra_state_attributes["tv_input_check"], "verified")
 
     async def test_short_channel_exits_menu_and_zero_pads_without_ok(self):
         events = await self._record("channel", "7")
@@ -143,6 +144,18 @@ class TotalplayPlayerTests(unittest.IsolatedAsyncioTestCase):
             {"entity_id": self.tv_entity, "source": "HDMI 2"}, blocking=True,
         )
         self.assertEqual([e[1] for e in events if e[0] == "key"], ["channel_up", "1", "0", "1"])
+        self.assertEqual(self.player.extra_state_attributes["tv_input_check"], "switch_unconfirmed")
+
+    async def test_source_switch_is_verified_after_tv_reports_input(self):
+        self.tv_state.attributes["source"] = "HDMI 1"
+
+        async def select(*args, **kwargs):
+            self.tv_state.attributes["source"] = "HDMI 2"
+
+        self.hass.services.async_call.side_effect = select
+        events = await self._record("channel", "101")
+        self.assertEqual(events[:2], _MENU_ESCAPE)
+        self.assertEqual(self.player.extra_state_attributes["tv_input_check"], "verified")
 
     async def test_unsupported_source_selection_does_not_block_channel(self):
         self.tv_state.attributes["source"] = "HDMI 1"
@@ -150,6 +163,7 @@ class TotalplayPlayerTests(unittest.IsolatedAsyncioTestCase):
         events = await self._record("channel", "101")
         self.hass.services.async_call.assert_not_awaited()
         self.assertEqual([e[1] for e in events if e[0] == "key"], ["channel_up", "1", "0", "1"])
+        self.assertEqual(self.player.extra_state_attributes["tv_input_check"], "switch_unsupported")
 
     async def test_source_selection_service_rejection_does_not_block_app(self):
         self.tv_state.attributes["source"] = "HDMI 1"
@@ -157,12 +171,32 @@ class TotalplayPlayerTests(unittest.IsolatedAsyncioTestCase):
         events = await self._record("app", "netflix")
         self.hass.services.async_call.assert_awaited_once()
         self.assertEqual([e[1] for e in events if e[0] == "key"], ["channel_up", "3", "3", "3", "ok"])
+        self.assertEqual(self.player.extra_state_attributes["tv_input_check"], "switch_failed")
 
-    async def test_unknown_source_never_switches_blindly(self):
+    async def test_unknown_source_requests_configured_hdmi_when_supported(self):
         self.tv_state.attributes.pop("source")
         events = await self._record("channel", "101")
+        self.hass.services.async_call.assert_awaited_once_with(
+            "media_player", "select_source",
+            {"entity_id": self.tv_entity, "source": "HDMI 2"}, blocking=True,
+        )
+        self.assertEqual([e[1] for e in events if e[0] == "key"], ["channel_up", "1", "0", "1"])
+        self.assertEqual(self.player.extra_state_attributes["tv_input_check"], "switch_unconfirmed")
+
+    async def test_unlisted_source_is_not_sent_to_tv(self):
+        self.tv_state.attributes["source"] = "HDMI 1"
+        self.entry.options["tv_source"] = "HDMI 4"
+        await self._record("channel", "101")
         self.hass.services.async_call.assert_not_awaited()
-        self.assertEqual(events[:2], _MENU_ESCAPE)
+        self.assertEqual(self.player.extra_state_attributes["tv_input_check"], "source_not_listed")
+
+    async def test_optional_power_switch_is_exposed_without_toggling_it(self):
+        self.entry.options["power_switch_entity"] = "switch.totalplay_smart_plug"
+        await self._record("channel", "101")
+        self.assertEqual(self.player.extra_state_attributes["connected_power_switch_entity"],
+                         "switch.totalplay_smart_plug")
+        self.assertEqual([call.args[:2] for call in self.hass.services.async_call.await_args_list], [],
+                         "Channel tune must not cut power or assume the decoder has booted")
 
     async def test_remote_step_does_not_send_extra_menu_escape(self):
         with patch.object(player_module, "async_send_key", new_callable=AsyncMock) as sender:
