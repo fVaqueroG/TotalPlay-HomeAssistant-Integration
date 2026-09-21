@@ -1,28 +1,30 @@
 # Totalplay STB Local Remote & Media Player (experimental)
 
-A community Home Assistant integration for local HTTP control of the **Totalplay Sagemcom DIW362 UHD** decoder. Not affiliated with Totalplay or Sagemcom. Channel selection, volume, and launching Netflix via channel 333 followed by an OK command were tested on the owner's hardware. The STB's current channel, power status, and its own EPG have not been confirmed readable.
+A community Home Assistant integration for local HTTP control of the **Totalplay Sagemcom DIW362 UHD** decoder. Not affiliated with Totalplay or Sagemcom. Channel selection, volume, and launching Netflix via channel 333 followed by an OK command were tested on the owner's hardware. Current channel, power status and the decoder's own EPG are not confirmed readable.
 
 ## Installation and TV connection
 
-Add `https://github.com/fVaqueroG/TotalPlay-HomeAssistant-Integration` to **HACS → Custom repositories → Integration**, download the latest **versioned release**, and restart Home Assistant. Add **Totalplay STB Local Remote** under **Settings → Devices & services** with the decoder's LAN address and local HTTP port (usually 80). In setup or its later **Configure** options, optionally select the TV/media-player entity physically connected to this decoder and its HDMI input. Existing entities and configuration do not need to be removed on update.
+Add `https://github.com/fVaqueroG/TotalPlay-HomeAssistant-Integration` under **HACS → Custom repositories → Integration**, install the latest **versioned release**, then restart Home Assistant. Add **Totalplay STB Local Remote** under **Settings → Devices & services**, providing the decoder's LAN address and its local HTTP port (usually 80). In setup or **Configure**, you may select the TV/media-player entity physically connected to the decoder and the HDMI input it uses. Existing decoder entities do not need to be removed when updating.
 
-When you select a channel or launch an app, the integration checks the TV's reported `source`; it calls `media_player.select_source` only if the TV positively reports a **different** input. If the TV is off or its current input is unknown, it does not switch inputs blindly. Individual decoder navigation/volume buttons do not force an input change. Keep decoder HTTP access restricted to your LAN.
+On channel and app actions, the integration selects the configured TV input **only if** the TV positively reports a different current input. When the TV is off or its current input is unknown, it does not switch inputs blindly. Navigation and volume buttons do not switch the input. Do not expose the decoder's HTTP port to the internet.
 
-## Add the card from the visual **By card** picker (v0.2.4+)
+## Automatic dashboard resource and visual card (v0.2.5+)
 
-After installing the updated integration and restarting Home Assistant, go to **Settings → Dashboards → Resources** (three-dot menu if necessary), and register `/totalplay_stb/totalplay-stb-card.js?v=0.2.4` as a **JavaScript module**. If an older version of this same URL is already registered, **edit that resource** to append/change `?v=0.2.4`; do not add a duplicate. Reload the Home Assistant frontend, then select **Edit dashboard → Add card → By card → Totalplay Channels, Apps & Remote**. Open its **visual editor** to choose your Totalplay `media_player` entity, optional decoder `remote` entity, card title, reference lineup, guide display, and overrides for individual channels/apps. The card is available in the picker after its JavaScript resource is loaded; installing an integration alone does not automatically add its frontend resource.
+**You no longer need to add the JavaScript resource manually.** On Home Assistant startup, the integration registers its bundled card as a Lovelace **JavaScript module** at `/totalplay_stb/totalplay-stb-card.js?v=<installed-integration-version>`. If that exact card path is already registered once, the integration updates its URL to the installed version so future HACS upgrades refresh the browser cache. It loads existing Lovelace resources before writing and never deletes or changes unrelated resources. When it detects **multiple existing resources for the same card path**, it leaves them unchanged and logs a warning; manually keep only one under **Settings → Dashboards → Resources**. Resource registration is supported in **Lovelace storage resource mode** (the UI-managed default); if your resources are managed in YAML, add this card's module URL to the `lovelace.resources` configuration yourself. A failure to register the card does not prevent the remote/media-player entities from loading.
 
-The default reference lineup is bundled locally in `custom_components/totalplay_stb/www/lineup.txt`. It contains the TV and audio channel names/numbers and app-launch channel numbers from the community [TV Channel Lists page](https://www.tvchannellists.com/w/List_of_channels_on_Totalplay), last edited there on June 15, 2026, transcribed and reviewed September 21, 2026. It is **not a live or package-specific Totalplay listing** and can differ by city, subscription, decoder firmware and date. The decoder has no verified lineup-feedback API. Disable **Show bundled community channel and app reference lineup** in the editor to use only your own configured channels/apps, or add channel-number overrides for changed names, EPG IDs and sensor mappings. The list is shipped with the integration; it does not access TV Channel Lists at runtime or use any browser challenge token. The card includes a channel-category selector so the reference lineup does not have to be browsed as one long section.
+After installing v0.2.5+ and restarting Home Assistant, reload the browser or Home Assistant companion app. Go to **Edit dashboard → Add card → By card → Totalplay Channels, Apps & Remote**. The **visual editor** allows you to choose the Totalplay decoder `media_player`, its `remote` entity, card title, reference lineup, Mexican TV guide, and overrides for individual TV/app channels. If the card is not listed, check that its JavaScript module appears **once** in Settings → Dashboards → Resources and refresh your browser. The automatic resource registration does not bypass HACS's integration-update detection; if HACS does not show a new release, use **Redownload → select the versioned release** before restarting.
 
-Apps appear separately from ordinary TV channels. An app tile sends its numbered launch channel, waits five seconds for the launch screen, then sends `ok`. Netflix channel **333**, followed by the separate `ok` key, was confirmed on physical hardware; other app-channel sequences and the combined five-second timing should be checked on your decoder. The community list contains some alternate app channel numbers, and its Disney+ Apps section disagrees with its channel table (`337` versus `335`); the editor leaves these choices editable and marks the extra `337` alternative as unverified.
+## Bundled channel and app reference lineup
 
-The **Remote** panel includes navigation/D-pad/OK, Back, Menu, Guide, volume/channel, playback and a single-digit number pad. Select the remote entity from the visual editor if it cannot be inferred from the decoder's entity ID. The Previous key defaults to `KEY_TV_SWAP`, and may be changed with `previous_channel_command` in YAML if your firmware uses a different key. Power and some media actions are toggles because actual decoder state is not exposed. Complete channel selections are padded to at least three digits (`1` → `001`, `12` → `012`) and sent at 100 ms spacing. Individual keypad taps remain one digit each.
+The default lineup is stored locally in `custom_components/totalplay_stb/www/lineup.txt`: channel names/numbers and app-launch channel numbers from the community [TV Channel Lists page](https://www.tvchannellists.com/w/List_of_channels_on_Totalplay), referenced September 21, 2026. It is **not a live or package-specific Totalplay lineup** and may vary by region, package, decoder and date. Disable **Show bundled community channel and app reference lineup** in the editor to use only your own channels/apps. You can override individual channel numbers, names, and EPG IDs in the editor. The card has a channel-category selector so you do not have to browse one long list.
 
-### Automatic Mexican program guide (Now / Next)
+App tiles appear separately from TV channels and use the same confirmed launch sequence: send the app channel number, wait five seconds, then send `ok`. Netflix **333** followed by `ok` was confirmed on the decoder; other app shortcut numbers and timing need testing. The community reference has inconsistent alternative app channel numbers; verify the appropriate one on your decoder before relying on it. Complete channel selections are padded to at least three digits (`1` → `001`, `12` → `012`) and sent at 100 ms spacing. The keypad still sends one digit per tap.
 
-When **Show XMLTV Now / Next** is enabled, the card reads a cached, authenticated Home Assistant endpoint at `/api/totalplay_stb/epg`. The integration obtains guide data from the public Mexican XMLTV feed `https://iptv-epg.org/files/epg-mx.xml`, caches successful responses for 15 minutes, and retries a failed feed after five minutes. The public guide was reachable in testing on September 21, 2026; future availability, completeness and schedule accuracy are outside this project's control. Home Assistant downloads the XMLTV once per cache period, not once per individual dashboard browser, and parses explicit program start/end time zones.
+The **Remote** panel includes D-pad/OK, Back, Menu, Guide, volume/channel, playback and number-pad controls. Choose the Totalplay remote entity in the visual editor if it cannot be inferred. The Previous Channel key currently defaults to `KEY_TV_SWAP` (the official Android app also queues `prev_track` when using its canal previo button); it is separate from the playback Previous Track key. Power is a toggle because actual decoder power state is not exposed.
 
-XMLTV channel **IDs are not Totalplay channel numbers**. The card tries a unique exact channel-name match after normalization, and otherwise shows **Programme information unavailable** instead of guessing. Duplicate names, provider spelling differences, and unavailable stations may require setting `epg_id` on a channel in the visual editor. Optional `program_entity` overrides the XMLTV data when its Home Assistant sensor provides a current title. Now and Next are displayed where supported; a guide match does not prove that a channel is included in your subscription. The guide does not provide any live playback stream.
+## Mexican TV guide (Now / Next)
+
+When enabled, the card reads the Home Assistant endpoint `/api/totalplay_stb/epg`. The integration fetches XMLTV from `https://iptv-epg.org/files/epg-mx.xml` and caches successful data for 15 minutes, retrying failures after five minutes. Availability and program accuracy of this third-party feed are not guaranteed. An XMLTV channel ID is **not** a Totalplay channel number: the card attempts a unique exact normalized name match and otherwise displays **Programme information unavailable**. Use an `epg_id` override in the visual editor to fix a mismatch. You may optionally use an existing Home Assistant program sensor instead. A guide match is not proof the channel is in your Totalplay subscription.
 
 ## Manual/YAML card configuration (optional)
 
@@ -36,20 +38,18 @@ epg: true
 channels:
   - number: '101'
     name: Azteca Uno
-    # epg_id: AztecaUno.mx  # Example only: use an actual XMLTV channel ID.
-    # program_entity: sensor.my_existing_channel_101_guide
+    # epg_id: Use an actual XMLTV channel ID when needed.
 apps:
   - name: Netflix
     number: '333'
 ```
 
-An explicit `channels` item with the same channel number overrides that item in the reference lineup, so you can set a precise EPG ID or custom name without duplicating a tile. An explicit `apps` item overrides an app tile with the same launch channel. Set `lineup: false` to use only the arrays provided in this YAML configuration.
+A channel or app explicitly added with the same channel number overrides that item in the reference lineup. Set `lineup: false` to use only your own configured items. The entity IDs above are examples: select your actual entities.
 
 ## Home Assistant service examples
 
-Select a numbered channel:
-
 ```yaml
+# Select channel 12:
 action: media_player.play_media
 target:
   entity_id: media_player.living_room_totalplay_diw362_uhd_media_player
@@ -58,9 +58,8 @@ data:
   media_content_id: '12'
 ```
 
-Launch Netflix via its verified launch channel:
-
 ```yaml
+# Launch Netflix:
 action: media_player.play_media
 target:
   entity_id: media_player.living_room_totalplay_diw362_uhd_media_player
@@ -69,12 +68,8 @@ data:
   media_content_id: netflix
 ```
 
-Other app launches use their **numeric launch channel** as the app `media_content_id`. App launching does not select a streaming profile or play an individual title. To send a decoder key directly, call `remote.send_command` on the configured Totalplay `remote` entity with `command: ok` or another supported key.
+Other app launches accept their numeric app channel as `media_content_id`. They open the app, not a specific title or streaming profile. To send a decoder key directly, use `remote.send_command` on the Totalplay remote entity.
 
-## HACS update and frontend cache notes
+## Limitations
 
-The manifest version and GitHub release tag are kept in sync by `.github/workflows/publish-release.yml`. If HACS does not detect the versioned release, refresh the repository information or choose **Redownload → select the versioned release** rather than `main` or an old commit. That action only replaces integration files; you do not need to delete your configured Totalplay device. After installing, restart Home Assistant. If the dashboard still displays an older card, edit its **existing** Resources URL to use the current `?v=` value above and reload the frontend. Keep exactly one registration of the card resource.
-
-## Limitations and transport compatibility
-
-`last_requested_channel` is the channel requested by Home Assistant, **not** confirmation of the one currently tuned. The remote endpoint offers no verified channel/power/playback-state or volume-level feedback. Some firmware returns malformed HTTP headers (`Cache-Control : no-cache, private`); our local transport checks the status line rather than parsing those invalid headers and does not retry ambiguous commands, which might otherwise press a key twice. Non-2xx responses still raise errors. Regression tests cover the transport, channel entry, EPG parsing, and dashboard JavaScript syntax.
+`last_requested_channel` is a requested channel, not confirmation of the currently tuned one. The decoder's actual current channel, power, playback status and volume level are not verified readable via this endpoint. The HTTP transport tolerates invalid firmware headers (such as `Cache-Control : no-cache, private`) without resending ambiguous commands that could press a button twice. Non-2xx responses still produce errors. Tests cover command transport, channel entry, XMLTV parsing, resource-registration safety and card JavaScript syntax.
