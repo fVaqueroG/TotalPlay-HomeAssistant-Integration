@@ -34,11 +34,11 @@ _CHANNEL_PATTERN = re.compile(r"[0-9]{1,4}\Z")
 
 
 def _validated_channel(value: str) -> str:
-    """Accept only a 1-4 digit channel number; never interpolate API keys."""
+    """Accept only channels 1-9999 and pad those below 100 to three digits."""
     number = str(value).strip()
     if not _CHANNEL_PATTERN.fullmatch(number) or int(number) == 0:
         raise HomeAssistantError("Channel must be a number between 1 and 9999")
-    return number
+    return number.zfill(3)
 
 
 async def async_setup_entry(
