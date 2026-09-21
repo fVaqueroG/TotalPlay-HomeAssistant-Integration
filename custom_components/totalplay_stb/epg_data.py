@@ -1,6 +1,6 @@
 """Pure XMLTV parsing for the optional Totalplay programme guide.
 
-The upstream XMLTV channel IDs are *not* Totalplay channel numbers.
+Upstream XMLTV station IDs are NOT Totalplay channel numbers.
 """
 
 from datetime import datetime, timezone, timedelta
@@ -12,21 +12,24 @@ MAX_PROGRAMMES = 150_000
 
 
 def _when(value: str) -> datetime | None:
-    """Parse the standard XMLTV timestamp and its explicit timezone."""
+    """Read common timezone-explicit XMLTV date formats; never guess a timezone."""
     value = value.strip()
-    for fmt in ("%Y%m%d%H%M%S %z", "%Y%m%d%H%M%S%z"):
+    for fmt in (
+        "%Y%m%d%H%M%S %z", "%Y%m%d%H%M%S%z",
+        "%Y%m%d%H%M %z", "%Y%m%d%H%M%z",
+        "%Y%m%d%H %z", "%Y%m%d%H%z",
+    ):
         try:
             return datetime.strptime(value, fmt).astimezone(timezone.utc)
         except ValueError:
             continue
-    return None  # Do not guess the timezone of unlabelled programmes.
+    return None
 
 
 def parse_xmltv(data: bytes, now: datetime | None = None) -> dict:
-    """Return a compact guide for channels with programmes around 'now'."""
+    """Return current and upcoming programmes, with honest source coverage metrics."""
     if len(data) > MAX_GUIDE_BYTES:
         raise ValueError("XMLTV guide exceeds size limit")
-    # Never allow a remote XML document to introduce entity or DTD definitions.
     if b"<!doctype" in data.lower() or b"<!entity" in data.lower():
         raise ValueError("XMLTV document contains a forbidden DTD")
     now = (now or datetime.now(timezone.utc)).astimezone(timezone.utc)
@@ -48,6 +51,8 @@ def parse_xmltv(data: bytes, now: datetime | None = None) -> dict:
             if len(channels) > MAX_CHANNELS:
                 raise ValueError("XMLTV channel count exceeds limit")
     count = 0
+    timestamped = 0
+    retained = 0
     for node in root.findall("programme"):
         count += 1
         if count > MAX_PROGRAMMES:
@@ -56,14 +61,25 @@ def parse_xmltv(data: bytes, now: datetime | None = None) -> dict:
         if channel is None:
             continue
         start, stop = _when(node.get("start", "")), _when(node.get("stop", ""))
-        if not start or not stop or not start < stop or stop <= now or start >= end:
+        if not start or not stop or not start < stop:
+            continue
+        timestamped += 1
+        if stop <= now or start >= end:
             continue
         title = (node.findtext("title") or "").strip()
         if title:
             channel["schedule"].append({
                 "title": title[:200], "start": start.isoformat(), "stop": stop.isoformat()
             })
+            retained += 1
     for channel in channels.values():
         channel["schedule"].sort(key=lambda item: item["start"])
         channel["schedule"] = channel["schedule"][:40]
-    return {"updated": now.isoformat(), "channels": list(channels.values()), "programme_count": count}
+    return {
+        "updated": now.isoformat(),
+        "channels": list(channels.values()),
+        "programme_count": count,
+        "valid_timestamp_count": timestamped,
+        "window_programme_count": retained,
+        "scheduled_channel_count": sum(bool(ch["schedule"]) for ch in channels.values()),
+    }
