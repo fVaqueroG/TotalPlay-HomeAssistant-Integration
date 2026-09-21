@@ -21,6 +21,18 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Inspect public XMLTV preamble
+        run: |
+          python - <<'PY'
+          import gzip, urllib.request
+          url = 'https://raw.githubusercontent.com/acidjesuz/EPGTalk/master/Latino_guide.xml.gz'
+          try:
+              with urllib.request.urlopen(url, timeout=20) as response:
+                  with gzip.GzipFile(fileobj=response) as stream:
+                      print('EPGTalk XMLTV header:', repr(stream.read(1000)))
+          except Exception as exc:
+              print('Public EPG header inspection unavailable:', type(exc).__name__, str(exc)[:150])
+          PY
       - name: Check Python syntax
         run: python -m compileall -q custom_components/totalplay_stb tests
       - name: Test Totalplay HTTP, Netflix, EPG fallback and display selection
