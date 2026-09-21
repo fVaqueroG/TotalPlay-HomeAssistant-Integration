@@ -20,13 +20,15 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up decoder entities and serve the authenticated EPG plus card resource."""
     domain_data = hass.data.setdefault(DOMAIN, {})
     if not domain_data.get("card_registered"):
-        # Keep the existing resource URL and card type so dashboards retain their
-        # configuration; the JavaScript implementation can change independently.
-        card_file = Path(__file__).parent / "www" / "totalplay-guide-v3.js"
-        lineup_file = Path(__file__).parent / "www" / "lineup.txt"
+        # The public resource URL and custom card type stay unchanged so installed
+        # dashboards and visual-editor configuration survive each release.
+        www = Path(__file__).parent / "www"
         await hass.http.async_register_static_paths(
-            [StaticPathConfig(_CARD_URL, str(card_file), False),
-             StaticPathConfig("/totalplay_stb/lineup.txt", str(lineup_file), False)]
+            [
+                StaticPathConfig(_CARD_URL, str(www / "totalplay-epg-responsive.js"), False),
+                StaticPathConfig("/totalplay_stb/totalplay-guide-v3.js", str(www / "totalplay-guide-v3.js"), False),
+                StaticPathConfig("/totalplay_stb/lineup.txt", str(www / "lineup.txt"), False),
+            ]
         )
         hass.http.register_view(TotalplayGuideView(hass))
         domain_data["card_registered"] = True
