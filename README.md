@@ -1,5 +1,7 @@
 # Totalplay STB Local Remote & IPTV Guide (experimental)
 
+[![Latest release](https://img.shields.io/github/v/release/fVaqueroG/TotalPlay-HomeAssistant-Integration?label=latest%20release)](https://github.com/fVaqueroG/TotalPlay-HomeAssistant-Integration/releases/latest) · [Latest release notes](https://github.com/fVaqueroG/TotalPlay-HomeAssistant-Integration/releases/latest) · [All releases and changes](https://github.com/fVaqueroG/TotalPlay-HomeAssistant-Integration/releases)
+
 Community Home Assistant integration for local HTTP control of the Totalplay Sagemcom DIW362 UHD decoder. Not affiliated with Totalplay or Sagemcom. The owner's hardware confirmed local channel selection and Netflix launch by channel 333, followed by OK. The decoder's actual tuned channel, power state and native EPG are **not** available as verified feedback; `last_requested_channel` is only the last command sent by Home Assistant.
 
 ## Install and update through HACS
