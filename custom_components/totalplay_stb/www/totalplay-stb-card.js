@@ -5,7 +5,23 @@ const tpEl=(tag,cls,text)=>{const el=document.createElement(tag);if(cls)el.class
 const tpValid=value=>/^[0-9]{1,4}$/.test(String(value??"").trim())&&Number(value)>0;
 const tpNorm=value=>String(value||"").normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLowerCase().replace(/[^a-z0-9]/g,"");
 const tpPlayers=hass=>Object.entries(hass?.states||{}).filter(([id,state])=>id.startsWith("media_player.")&&Object.prototype.hasOwnProperty.call(state.attributes||{},"last_requested_channel"));
-function tpGuideMatch(guide,ch){const list=guide?.channels||[];if(ch.epg_id)return list.find(g=>g.id===ch.epg_id)||null;const possible=list.filter(g=>tpNorm(g.name)===tpNorm(ch.name));return possible.length===1?possible[0]:null;}
+function tpGuideMatch(guide,ch){
+ const list=guide?.channels||[];
+ if(ch.epg_id)return list.find(g=>g.id===ch.epg_id)||null;
+ const wanted=tpNorm(ch.name);
+ if(!wanted)return null;
+ const names=g=>Array.isArray(g.names)&&g.names.length?g.names:[g.name];
+ // Never resolve an ambiguous station using a substring or channel number.
+ const exact=list.filter(g=>names(g).some(name=>tpNorm(name)===wanted));
+ if(exact.length===1)return exact[0];
+ if(exact.length>1)return null;
+ // A suffix like HD, SD, México or MX is not a different station.
+ const base=name=>tpNorm(name).replace(/(?:highdefinition|mexico|hd|sd|mx)+$/g,"");
+ const stripped=base(ch.name);
+ if(!stripped)return null;
+ const possible=list.filter(g=>names(g).some(name=>base(name)===stripped));
+ return possible.length===1?possible[0]:null;
+}
 class TotalplayStbCard extends HTMLElement{
  static getConfigElement(){return document.createElement("totalplay-stb-card-editor");}
  static getStubConfig(hass){return {entity:tpPlayers(hass)[0]?.[0]||"",title:"Totalplay TV"};}
@@ -17,6 +33,8 @@ class TotalplayStbCard extends HTMLElement{
  _build(){const root=this.shadowRoot;root.replaceChildren(tpEl("style","",TP_CSS));const card=tpEl("ha-card");const top=tpEl("div","top");top.appendChild(tpEl("div","title",this._config.title));this._source=tpEl("div","small");top.appendChild(this._source);const toggle=this._button("Remote ▾",null,"toggle");toggle.onclick=()=>{this._remoteOpen=!this._remoteOpen;toggle.textContent=this._remoteOpen?"Remote ▴":"Remote ▾";this._remote.hidden=!this._remoteOpen;};top.appendChild(toggle);card.appendChild(top);
  this._remote=tpEl("div","remote");this._remote.hidden=!this._remoteOpen;card.appendChild(this._remote);this._drawRemote();
  card.appendChild(tpEl("div","heading","Channels"));
+ this._guideStatus=tpEl("div","small",this._config.epg?"TV guide: loading…":"TV guide disabled");
+ this._guideStatus.setAttribute("role","status");card.appendChild(this._guideStatus);
  const byNumber=new Map((this._config.lineup?(this._reference?.channels||[]):[]).map(ch=>[String(ch.number),{...ch}]));
  for(const ch of this._config.channels){const key=String(ch.number);byNumber.set(key,{...(byNumber.get(key)||{}),...ch});}
  const allChannels=[...byNumber.values()].filter(ch=>tpValid(ch.number)).sort((a,b)=>Number(a.number)-Number(b.number));
@@ -38,7 +56,17 @@ class TotalplayStbCard extends HTMLElement{
  }
  _remoteEntity(){if(this._config.remote)return this._config.remote;const players=this._hass?.states||{},entry=players[this._config.entity];const deviceId=entry?.attributes?.friendly_name;void deviceId;const guessed=`remote.${String(this._config.entity||"").slice(13).replace(/_media_player$/,"")}_remote`;return players[guessed]?guessed:null;}
  _render(){if(!this._hass||!this._config||!this._source)return;const decoder=this._hass.states[this._config.entity];if(!decoder){this._source.textContent="Select an available Totalplay decoder";}else{const tvId=decoder.attributes.connected_tv_entity,wanted=decoder.attributes.connected_tv_source,tv=tvId?this._hass.states[tvId]:null,actual=tv?.attributes?.source;this._source.textContent=!tvId||!wanted?"No TV/input linked":!actual||actual==="unknown"||actual==="unavailable"?`TV input unknown · target ${wanted}`:String(actual).trim().toLowerCase()===String(wanted).trim().toLowerCase()?`TV input: ${actual} ✓`:`TV input: ${actual} · target ${wanted}`;}
- const now=Date.now();for(const {ch,program} of this._programs||[]){const state=ch.program_entity?this._hass.states[ch.program_entity]:null,attrs=state?.attributes||{},sensor=attrs.current_program||attrs.program_title||attrs.program||attrs.title||state?.state;let title=typeof sensor==="string"&&!['unknown','unavailable','none'].includes(sensor.toLowerCase())?sensor:"";let next="";if(!title&&this._config.epg){const match=tpGuideMatch(this._guide,ch);const schedule=match?.schedule||[];const current=schedule.find(p=>Date.parse(p.start)<=now&&now<Date.parse(p.stop));const following=schedule.find(p=>Date.parse(p.start)>now);if(current){title=current.title;next=following?.title||"";}}program.textContent=title?`Now: ${title}${next?` · Next: ${next}`:""}`:"Programme information unavailable";program.title=next?`Next: ${next}`:"";}}
+ const now=Date.now();
+ if(this._guideStatus){
+  const guide=this._guide,visible=this._programs||[];
+  const matches=visible.map(({ch})=>tpGuideMatch(guide,ch)).filter(Boolean);
+  const onAir=matches.filter(g=>g.schedule?.some(p=>Date.parse(p.start)<=now&&now<Date.parse(p.stop))).length;
+  this._guideStatus.textContent=!this._config.epg?"TV guide disabled":
+   !guide?"TV guide: loading…":
+   guide.error?`TV guide unavailable (${guide.error}); channel control still works`:
+   `TV guide: ${onAir} on-air / ${matches.length} matched channels shown (${guide.channels?.length||0} stations in guide). Unmatched channels can be mapped in the visual editor.`;
+ }
+ for(const {ch,program} of this._programs||[]){const state=ch.program_entity?this._hass.states[ch.program_entity]:null,attrs=state?.attributes||{},sensor=attrs.current_program||attrs.program_title||attrs.program||attrs.title||state?.state;let title=typeof sensor==="string"&&!['unknown','unavailable','none'].includes(sensor.toLowerCase())?sensor:"";let next="";if(!title&&this._config.epg){const match=tpGuideMatch(this._guide,ch);const schedule=match?.schedule||[];const current=schedule.find(p=>Date.parse(p.start)<=now&&now<Date.parse(p.stop));const following=schedule.find(p=>Date.parse(p.start)>now);if(current){title=current.title;next=following?.title||"";}else if(following){next=following.title;}}program.textContent=title?`Now: ${title}${next?` · Next: ${next}`:""}`:next?`Next: ${next}`:"Programme information unavailable";program.title=next?`Next: ${next}`:"";}}
  async _loadLineup(){
   if(!this._hass||!this._config?.lineup||this._lineupLoading||this._lineupLoaded)return;
   this._lineupLoading=true;
@@ -58,7 +86,19 @@ class TotalplayStbCard extends HTMLElement{
   }catch(error){this._lineupLoaded=true;console.warn("Totalplay reference lineup unavailable:",error);}
   finally{this._lineupLoading=false;}
  }
- async _loadGuide(){if(!this._hass||!this._config?.epg||this._loadingGuide)return;if(this._guide&&Date.now()-this._guideFetched<5*60*1000)return;this._loadingGuide=true;try{const guide=await this._hass.callApi("GET","totalplay_stb/epg");if(guide?.channels&&Array.isArray(guide.channels)){this._guide=guide;this._guideFetched=Date.now();this._render();}}catch(error){this._guideFetched=Date.now();console.warn("Totalplay EPG unavailable:",error);}finally{this._loadingGuide=false;}}
+ async _loadGuide(){
+  if(!this._hass||!this._config?.epg||this._loadingGuide)return;
+  if(this._guideFetched&&Date.now()-this._guideFetched<5*60*1000)return;
+  this._loadingGuide=true;
+  try{
+   const guide=await this._hass.callApi("GET","totalplay_stb/epg");
+   if(!Array.isArray(guide?.channels))throw Error("Invalid guide response");
+   this._guide=guide;
+  }catch(error){
+   this._guide={channels:[],error:"Cannot load XMLTV from Home Assistant"};
+   console.warn("Totalplay EPG unavailable:",error);
+  }finally{this._guideFetched=Date.now();this._loadingGuide=false;this._render();}
+ }
  async _send(domain,service,data,message){if(!this._hass||this._busy)return;this._busy=true;this._feedback.className="status";this._feedback.textContent=message;try{await this._hass.callService(domain,service,data);this._feedback.textContent="Command sent";}catch(error){this._feedback.className="status error";this._feedback.textContent=error?.message||"Command failed";}finally{this._busy=false;}}
  _command(command){const remote=this._remoteEntity();if(!remote){this._feedback.textContent="Select a Totalplay remote entity in the card editor";return;}return this._send("remote","send_command",{entity_id:remote,command},`Sending ${command}…`);}
  _play(type,id){if(!tpValid(id)||!this._hass?.states?.[this._config.entity]){this._feedback.textContent="Select an available Totalplay decoder";return;}return this._send("media_player","play_media",{entity_id:this._config.entity,media_content_type:type,media_content_id:id},type==="app"?`Launching app on channel ${id}…`:`Selecting channel ${id}…`);}
@@ -67,7 +107,19 @@ class TotalplayStbCard extends HTMLElement{
 /* The card picker calls getConfigElement(); editor emits config-changed on every edit. */
 class TotalplayStbCardEditor extends HTMLElement{
  setConfig(config){this._config={...TP_DEFAULT,...config,channels:[...(config.channels||[])],apps:[...(config.apps||TP_DEFAULT.apps)]};if(!this.shadowRoot)this.attachShadow({mode:"open"});this._draw();}
- set hass(hass){this._hass=hass;this._draw();}
+ set hass(hass){this._hass=hass;this._draw();this._loadGuideOptions();}
+ async _loadGuideOptions(){
+  if(!this._hass||!this._config?.epg||this._guideOptionsLoaded||this._guideOptionsLoading)return;
+  this._guideOptionsLoading=true;
+  try{
+   const guide=await this._hass.callApi("GET","totalplay_stb/epg");
+   if(Array.isArray(guide?.channels)&&!guide.error){
+    this._guideOptions=guide.channels.filter(g=>g.id&&g.name)
+      .sort((a,b)=>a.name.localeCompare(b.name));
+   }
+  }catch(error){console.warn("Totalplay editor EPG options unavailable:",error);}
+  finally{this._guideOptionsLoading=false;this._guideOptionsLoaded=true;this._draw();}
+ }
  _change(patch){this._config={...this._config,...patch};this.dispatchEvent(new CustomEvent("config-changed",{detail:{config:this._config},bubbles:true,composed:true}));}
  _field(container,label,value,onchange,type="text"){const wrap=tpEl("label","field");wrap.appendChild(tpEl("span","",label));const input=tpEl("input");input.type=type;input.value=value??"";input.addEventListener("change",()=>onchange(input.value));wrap.appendChild(input);container.appendChild(wrap);return input;}
  _select(container,label,options,value,onchange){const wrap=tpEl("label","field");wrap.appendChild(tpEl("span","",label));const select=tpEl("select");for(const [id,name] of options){const option=tpEl("option","",name);option.value=id;select.appendChild(option);}select.value=value||"";select.addEventListener("change",()=>onchange(select.value));wrap.appendChild(select);container.appendChild(wrap);return select;}
@@ -77,7 +129,13 @@ class TotalplayStbCardEditor extends HTMLElement{
  this._field(root,"Card title",this._config.title,title=>this._change({title}));
  const lineupRow=tpEl("label","field"),lineupToggle=tpEl("input");lineupToggle.type="checkbox";lineupToggle.style.width="auto";lineupToggle.checked=!!this._config.lineup;lineupToggle.onchange=()=>this._change({lineup:lineupToggle.checked});lineupRow.appendChild(lineupToggle);lineupRow.appendChild(tpEl("span","","Show bundled community channel and app reference lineup"));root.appendChild(lineupRow);
  const epgRow=tpEl("label","field");const checkbox=tpEl("input");checkbox.type="checkbox";checkbox.style.width="auto";checkbox.checked=!!this._config.epg;checkbox.onchange=()=>this._change({epg:checkbox.checked});epgRow.appendChild(checkbox);epgRow.appendChild(tpEl("span","","Show XMLTV Now / Next when available"));root.appendChild(epgRow);
- const editRows=(kind)=>{root.appendChild(tpEl("h4","",kind==="channels"?"TV channels and EPG mapping":"App launch channels"));for(const [index,item] of this._config[kind].entries()){const row=tpEl("div","editor-row");this._field(row,"Channel number",item.number,val=>this._replace(kind,index,{number:val}));this._field(row,"Name",item.name,val=>this._replace(kind,index,{name:val}));if(kind==="channels"){this._field(row,"EPG channel ID (optional; name matching is automatic)",item.epg_id,val=>this._replace(kind,index,{epg_id:val}));this._field(row,"Home Assistant program sensor (optional)",item.program_entity,val=>this._replace(kind,index,{program_entity:val}));}const remove=tpEl("button","","Remove");remove.type="button";remove.onclick=()=>{const list=[...this._config[kind]];list.splice(index,1);this._change({[kind]:list});this._draw();};row.appendChild(remove);root.appendChild(row);}const add=tpEl("button","",`Add ${kind==="channels"?"channel":"app"}`);add.type="button";add.onclick=()=>{this._change({[kind]:[...this._config[kind],{name:"",number:""}]});this._draw();};root.appendChild(add);};editRows("channels");editRows("apps");root.appendChild(tpEl("p","field","Guide names and IDs belong to the XMLTV provider, not the decoder. Only assign Totalplay channel numbers verified for your region and package."));}
+ const editRows=(kind)=>{root.appendChild(tpEl("h4","",kind==="channels"?"TV channels and EPG mapping":"App launch channels"));for(const [index,item] of this._config[kind].entries()){const row=tpEl("div","editor-row");this._field(row,"Channel number",item.number,val=>this._replace(kind,index,{number:val}));this._field(row,"Name",item.name,val=>this._replace(kind,index,{name:val}));if(kind==="channels"){if(this._guideOptions?.length){
+   const options=[["","Match station name automatically"],...this._guideOptions.map(g=>[g.id,`${g.name} (${g.id})`])];
+   if(item.epg_id&&!options.some(([id])=>id===item.epg_id))options.push([item.epg_id,item.epg_id]);
+   this._select(row,"EPG station for this channel (optional)",options,item.epg_id,val=>this._replace(kind,index,{epg_id:val}));
+  }else{
+   this._field(row,"EPG channel ID (optional; name matching is automatic)",item.epg_id,val=>this._replace(kind,index,{epg_id:val}));
+  }this._field(row,"Home Assistant program sensor (optional)",item.program_entity,val=>this._replace(kind,index,{program_entity:val}));}const remove=tpEl("button","","Remove");remove.type="button";remove.onclick=()=>{const list=[...this._config[kind]];list.splice(index,1);this._change({[kind]:list});this._draw();};row.appendChild(remove);root.appendChild(row);}const add=tpEl("button","",`Add ${kind==="channels"?"channel":"app"}`);add.type="button";add.onclick=()=>{this._change({[kind]:[...this._config[kind],{name:"",number:""}]});this._draw();};root.appendChild(add);};editRows("channels");editRows("apps");root.appendChild(tpEl("p","field","Guide names and IDs belong to the XMLTV provider, not the decoder. Only assign Totalplay channel numbers verified for your region and package."));}
  _replace(kind,index,patch){const list=this._config[kind].map((item,i)=>i===index?{...item,...patch}:item);this._change({[kind]:list});}
 }
 if(!customElements.get("totalplay-stb-card"))customElements.define("totalplay-stb-card",TotalplayStbCard);
