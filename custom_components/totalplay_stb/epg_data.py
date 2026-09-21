@@ -37,9 +37,14 @@ def parse_xmltv(data: bytes, now: datetime | None = None) -> dict:
     channels: dict[str, dict] = {}
     for node in root.findall("channel"):
         channel_id = node.get("id", "").strip()
-        name = (node.findtext("display-name") or "").strip()
-        if channel_id and name and channel_id not in channels:
-            channels[channel_id] = {"id": channel_id, "name": name, "schedule": []}
+        names = list(dict.fromkeys(
+            name.text.strip() for name in node.findall("display-name")
+            if name.text and name.text.strip()
+        ))
+        if channel_id and names and channel_id not in channels:
+            channels[channel_id] = {
+                "id": channel_id, "name": names[0], "names": names[:10], "schedule": []
+            }
             if len(channels) > MAX_CHANNELS:
                 raise ValueError("XMLTV channel count exceeds limit")
     count = 0
