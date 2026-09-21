@@ -21,5 +21,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Check Python syntax
+        run: python -m compileall -q custom_components/totalplay_stb
       - name: Validate with hassfest
         uses: home-assistant/actions/hassfest@master
