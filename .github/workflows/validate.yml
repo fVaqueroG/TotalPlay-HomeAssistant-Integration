@@ -25,9 +25,13 @@ jobs:
         run: python -m compileall -q custom_components/totalplay_stb tests
       - name: Test Totalplay HTTP, Netflix and display selection
         run: python -m unittest discover -s tests -v
-      - name: Check dashboard card JavaScript syntax
-        run: node --check custom_components/totalplay_stb/www/totalplay-stb-card.js
-      - name: Smoke-test IPTV timeline, guide state and remote
-        run: node tests/test_card_guide.js
+      - name: Check dashboard JavaScript syntax
+        run: |
+          node --check custom_components/totalplay_stb/www/totalplay-stb-card.js
+          node --check custom_components/totalplay_stb/www/totalplay-guide-v3.js
+      - name: Smoke-test original card and redesigned IPTV guide
+        run: |
+          node tests/test_card_guide.js
+          node tests/test_guide_v3.cjs
       - name: Validate with hassfest
         uses: home-assistant/actions/hassfest@master
