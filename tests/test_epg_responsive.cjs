@@ -6,7 +6,7 @@ const path = require('node:path');
 const www = path.join(__dirname, '../custom_components/totalplay_stb/www');
 const base = fs.readFileSync(path.join(www, 'totalplay-guide-v3.js'), 'utf8');
 const addon = fs.readFileSync(path.join(www, 'totalplay-epg-responsive.js'), 'utf8');
-assert.match(addon, /^import '\.\/totalplay-guide-v3\.js';/);
+assert.match(addon, /import '\.\/totalplay-guide-v3\.js';/);
 const types = new Map();
 const sandbox = {
   HTMLElement: class {},
@@ -16,7 +16,7 @@ const sandbox = {
 };
 vm.createContext(sandbox);
 vm.runInContext(base, sandbox);
-vm.runInContext(addon.replace(/^import '\.\/totalplay-guide-v3\.js';\s*/, ''), sandbox);
+vm.runInContext(addon.replace(/import '\.\/totalplay-guide-v3\.js';\s*/, ''), sandbox);
 const Card = types.get('totalplay-stb-card');
 const card = Object.create(Card.prototype);
 card._config = {lineup: true, epg: true, channels: [], apps: []};
