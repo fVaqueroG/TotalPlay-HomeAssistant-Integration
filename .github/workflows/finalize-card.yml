@@ -1,0 +1,57 @@
+name: Finalize Totalplay visual card and guide display
+on:
+  push:
+    paths: [.github/workflows/finalize-card.yml]
+permissions:
+  contents: write
+jobs:
+  finalize:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Apply checked minimal frontend changes
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          file=Path('custom_components/totalplay_stb/www/totalplay-stb-card.js')
+          src=file.read_text(encoding='utf-8')
+          def replace(old,new):
+              global src
+              assert src.count(old)==1, f'Expected one patch anchor, got {src.count(old)}: {old[:80]}'
+              src=src.replace(old,new,1)
+          replace('return {type:"custom:totalplay-stb-card",entity:tpPlayers(hass)[0]?.[0]||"",title:"Totalplay TV"};',
+                  'return {entity:tpPlayers(hass)[0]?.[0]||"",title:"Totalplay TV"};')
+          replace('program.textContent=title?`Now: ${title}`:"Programme information unavailable";',
+                  'program.textContent=title?`Now: ${title}${next?` · Next: ${next}`:""}`:"Programme information unavailable";')
+          file.write_text(src,encoding='utf-8')
+          lineup=Path('custom_components/totalplay_stb/www/lineup.txt')
+          text=lineup.read_text(encoding='utf-8')
+          assert 'A|335|Disney+' in text and 'A|337|Disney+' not in text
+          lineup.write_text(text+'A|337|Disney+ (alternative, unverified)\n',encoding='utf-8')
+          PY
+      - name: Validate card picker, program display, and lineup data
+        run: |
+          node --check custom_components/totalplay_stb/www/totalplay-stb-card.js
+          python -m unittest discover -s tests -v
+          node - <<'JS'
+          const fs=require('node:fs');const vm=require('node:vm');const assert=require('node:assert/strict');
+          const classes=new Map();const ctx={HTMLElement:class{},window:{customCards:[]},customElements:{get:name=>classes.get(name),define:(name,klass)=>classes.set(name,klass)},console};
+          vm.runInNewContext(fs.readFileSync('custom_components/totalplay_stb/www/totalplay-stb-card.js','utf8'),ctx);
+          const klass=classes.get('totalplay-stb-card');assert(klass);assert(classes.has('totalplay-stb-card-editor'));
+          const stub=klass.getStubConfig({states:{'media_player.test_totalplay':{attributes:{last_requested_channel:null}}}});
+          assert.equal(stub.entity,'media_player.test_totalplay');assert.equal(stub.type,undefined);
+          assert(ctx.window.customCards.some(card=>card.type==='totalplay-stb-card'));
+          const lines=fs.readFileSync('custom_components/totalplay_stb/www/lineup.txt','utf8').split(/\r?\n/).filter(row=>row&&!row.startsWith('#'));
+          const channels=lines.filter(row=>row.startsWith('C|'));const apps=lines.filter(row=>row.startsWith('A|'));
+          assert(channels.length>250);assert(apps.length>=18);
+          assert(lines.includes('A|333|Netflix'));
+          console.log(`Card picker, visual editor and reference lineup verified: ${channels.length} channels, ${apps.length} app-launch numbers`);
+          JS
+      - name: Commit and remove one-time workflow
+        run: |
+          git rm -f .github/workflows/finalize-card.yml
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          git commit -m 'Finalize selectable Totalplay guide card and comprehensive app reference list'
+          git push origin HEAD:main
