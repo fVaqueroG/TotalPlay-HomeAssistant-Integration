@@ -1,0 +1,26 @@
+name: Probe publicly available Totalplay lineup
+on:
+  push:
+    paths: [.github/workflows/lineup-probe.yml]
+  workflow_dispatch:
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check public lineup availability and app/channel row structure
+        run: |
+          python - <<'PY'
+          import urllib.request
+          import re
+          url='https://www.tvchannellists.com/w/List_of_channels_on_Totalplay'
+          req=urllib.request.Request(url,headers={'User-Agent':'Totalplay-HomeAssistant-Integration/0.2 (channel lineup availability test)'})
+          try:
+              with urllib.request.urlopen(req,timeout=20) as resp:
+                  data=resp.read(1_500_000)
+                  text=data.decode('utf-8',errors='replace')
+                  print('STATUS:',resp.status,'LENGTH:',len(data),'TABLES:',text.lower().count('<table'),'ROWS:',text.lower().count('<tr'))
+                  print('HAS_CHANNEL_333:',bool(re.search(r'333',text)),'HAS_NETFLIX:',bool(re.search(r'netflix',text,re.I)))
+                  print('CHALLENGE:',bool(re.search(r'cf-challenge|Just a moment',text,re.I)))
+          except Exception as exc:
+              print('FETCH FAILED:',type(exc).__name__,str(exc)[:220])
+          PY
