@@ -1,0 +1,57 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Control local del decodificador Totalplay",
+        "description": "Configura la conexión local del decodificador. La televisión y la entrada HDMI se seleccionan después.",
+        "data": {
+          "host": "Dirección IP del decodificador",
+          "port": "Puerto HTTP"
+        }
+      },
+      "display": {
+        "title": "Televisión conectada",
+        "description": "Elige la televisión o reproductor al que está conectado el decodificador por HDMI. Deja el campo vacío si no está disponible en Home Assistant.",
+        "data": {
+          "tv_entity": "Televisión / reproductor conectado"
+        }
+      },
+      "source": {
+        "title": "Entrada de Totalplay en la televisión",
+        "description": "Elige la entrada HDMI del decodificador. Solo se cambiará la entrada si la televisión informa que actualmente está en otra.",
+        "data": {
+          "tv_source": "Entrada HDMI de la televisión"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "No se pudo conectar a esa dirección IP y puerto",
+      "invalid_host": "Introduce una dirección IPv4 privada",
+      "invalid_source": "Selecciona una entrada de televisión válida"
+    },
+    "abort": {
+      "already_configured": "Este decodificador ya está configurado"
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Televisión conectada",
+        "description": "Elige la televisión o reproductor conectado al decodificador. Deja el campo vacío para desactivar la selección automática de entrada.",
+        "data": {
+          "tv_entity": "Televisión / reproductor conectado"
+        }
+      },
+      "source": {
+        "title": "Entrada de Totalplay en la televisión",
+        "description": "Elige la entrada HDMI del decodificador. La integración comprobará la entrada actual antes de cambiarla.",
+        "data": {
+          "tv_source": "Entrada HDMI de la televisión"
+        }
+      }
+    },
+    "error": {
+      "invalid_source": "Selecciona una entrada de televisión válida"
+    }
+  }
+}
