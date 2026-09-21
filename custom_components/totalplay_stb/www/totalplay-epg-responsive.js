@@ -58,6 +58,11 @@ TotalplayCard.prototype._channels = function () {
 const originalRenderGuide = TotalplayCard.prototype._renderGuide;
 TotalplayCard.prototype._renderGuide = function () {
   originalRenderGuide.call(this);
+  // The base renderer determines whether filtered rows remain. Keep its count,
+  // but replace its manual Show more button with scroll-driven pagination.
+  this._guideHasMore = Boolean(this._more && !this._more.hidden);
+  if (this._more) this._more.hidden = true;
+  if (this._backToTop && this._scroll) this._backToTop.hidden = this._scroll.scrollTop < 240;
   if (!this._guideStatus || !this._guide || this._guide.error || !this._config?.epg) return;
   const guide = this._guide;
   const activeStations = guide.channels.filter(station => (station.schedule || []).some(program =>
@@ -93,6 +98,8 @@ ha-card {height:min(760px,max(280px,calc(100dvh - 175px))); display:flex; flex-d
 .guide-info,.selection,.apps-strip,.showmore {flex:none}
 .guide-info {max-height:78px; overflow:auto; align-items:flex-start}
 .guide-scroll {flex:1; min-height:68px; max-height:none!important; overflow:auto}
+.showmore {display:none!important}
+.tp-back-to-top {white-space:nowrap;flex:none;font-size:12px;padding:6px 10px}
 .remote {min-height:0; max-height:100%; overflow:auto}
 @media(max-width:1100px) {
   .layout.remote-visible {display:block; position:relative; grid-template-columns:none}
@@ -106,6 +113,7 @@ ha-card {height:min(760px,max(280px,calc(100dvh - 175px))); display:flex; flex-d
   .pills {max-height:43px}
 }
 `;
+
 const originalSetConfig = TotalplayCard.prototype.setConfig;
 TotalplayCard.prototype.setConfig = function (config) {
   originalSetConfig.call(this, config);
@@ -115,4 +123,35 @@ TotalplayCard.prototype.setConfig = function (config) {
     style.textContent = RESPONSIVE_CSS;
     this.shadowRoot.appendChild(style);
   }
+  // setConfig rebuilds the guide node. Bind once per node, including when the
+  // visual editor rebuilds the card, without attaching duplicate listeners.
+  const scroll = this._scroll;
+  if (!scroll || this._autoScrollNode === scroll) return;
+  this._autoScrollNode = scroll;
+  const info = this._guidePanel?.querySelector('.guide-info');
+  if (info) {
+    const top = document.createElement('button');
+    top.type = 'button';
+    top.className = 'btn tp-back-to-top';
+    top.textContent = '↑ Back to top';
+    top.title = 'Return to the first channel';
+    top.hidden = true;
+    top.addEventListener('click', () => scroll.scrollTo({top: 0, behavior: 'smooth'}));
+    info.appendChild(top);
+    this._backToTop = top;
+  }
+  scroll.addEventListener('scroll', () => {
+    if (this._scroll !== scroll) return;
+    if (this._backToTop) this._backToTop.hidden = scroll.scrollTop < 240;
+    if (this._tab !== 'guide' || this._autoGrowing || !this._guideHasMore) return;
+    const remaining = scroll.scrollHeight - scroll.scrollTop - scroll.clientHeight;
+    if (remaining > Math.max(160, scroll.clientHeight * .35)) return;
+    this._autoGrowing = true;
+    try {
+      this._limit += 35;
+      this._renderGuide(); // The base card restores both scrollTop and scrollLeft.
+    } finally {
+      this._autoGrowing = false;
+    }
+  }, {passive: true});
 };
