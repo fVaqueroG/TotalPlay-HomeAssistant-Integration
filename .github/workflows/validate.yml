@@ -33,7 +33,7 @@ jobs:
           node --input-type=module --check < custom_components/totalplay_stb/www/totalplay-pages-remote.js
           node --input-type=module --check < custom_components/totalplay_stb/www/totalplay-guide-layout-v036.js
           node --input-type=module --check < custom_components/totalplay_stb/www/totalplay-app-logos.js
-          node --input-type=module --check < custom_components/totalplay_stb/www/totalplay-stb-v037.js
+          node --input-type=module --check < custom_components/totalplay_stb/www/totalplay-stb-v038.js
       - name: Test IPTV guide, EPG mapping, scrolling, pages, layout and logos
         run: |
           node tests/test_card_guide.js
