@@ -1,6 +1,11 @@
-"""Authenticated Home Assistant proxy for optional public Mexican XMLTV listings."""
+"""Authenticated Home Assistant proxy for independent, optional public Mexican XMLTV guides.
+
+Only programme metadata is downloaded. STB tuning remains local to Totalplay.
+"""
 
 import asyncio
+import gzip
+import io
 import logging
 import time
 
@@ -11,16 +16,19 @@ from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from .epg_data import MAX_GUIDE_BYTES, parse_xmltv
 
 _LOGGER = logging.getLogger(__name__)
-# These are independent public XMLTV sources, not the decoder's native EPG.
-GUIDE_URL = "https://iptv-epg.org/files/epg-mx.xml"
-BACKUP_GUIDE_URL = "https://iptv-org.github.io/epg/guides/mx/gatotv.com.epg.xml"
-GUIDE_SOURCES = (GUIDE_URL, BACKUP_GUIDE_URL)
+# EPGshare MX1 is a Mexico-specific XMLTV feed; unlike an M3U playlist,
+# it provides programme times and titles. These are independent public guides,
+# not Totalplay's proprietary EPG or proof of channel/package availability.
+GUIDE_URL = "https://epgshare01.online/epgshare01/epg_ripper_MX1.xml.gz"
+BACKUP_GUIDE_URL = "https://iptv-epg.org/files/epg-mx.xml"
+THIRD_GUIDE_URL = "https://iptv-org.github.io/epg/guides/mx/gatotv.com.epg.xml"
+GUIDE_SOURCES = (GUIDE_URL, BACKUP_GUIDE_URL, THIRD_GUIDE_URL)
 _CACHE_SECONDS = 15 * 60
 _RETRY_SECONDS = 5 * 60
 
 
 def _error_description(exc: Exception) -> str:
-    """Give users an actionable category without exposing private request details."""
+    """Provide an actionable category without revealing private connection details."""
     if isinstance(exc, ClientResponseError):
         return f"HTTP {exc.status} from the XMLTV provider"
     if isinstance(exc, (asyncio.TimeoutError, TimeoutError)):
@@ -32,8 +40,27 @@ def _error_description(exc: Exception) -> str:
     return f"XMLTV processing error ({type(exc).__name__})"
 
 
+def _parse_guide_bytes(raw: bytes) -> dict:
+    """Handle .xml and .xml.gz safely; cap both transfer and decompressed XML.
+
+    aiohttp might already have decoded HTTP Content-Encoding: gzip; sniffing the
+    gzip file header also supports files served as application/gzip or octet-stream.
+    """
+    if len(raw) > MAX_GUIDE_BYTES:
+        raise ValueError("Guide exceeds the XMLTV download size limit")
+    if raw.startswith(b"\x1f\x8b"):
+        try:
+            with gzip.GzipFile(fileobj=io.BytesIO(raw)) as stream:
+                raw = stream.read(MAX_GUIDE_BYTES + 1)
+        except (OSError, EOFError) as exc:
+            raise ValueError("Invalid compressed XMLTV guide") from exc
+        if len(raw) > MAX_GUIDE_BYTES:
+            raise ValueError("Uncompressed guide exceeds the XMLTV size limit")
+    return parse_xmltv(raw)
+
+
 class TotalplayGuideView(HomeAssistantView):
-    """Expose programme listings, not a claim about Totalplay channel numbering."""
+    """Expose current programmes via an authenticated HA endpoint."""
 
     url = "/api/totalplay_stb/epg"
     name = "api:totalplay_stb:epg"
@@ -46,7 +73,7 @@ class TotalplayGuideView(HomeAssistantView):
         self._next_refresh = 0.0
 
     async def get(self, request: web.Request) -> web.Response:
-        """Return cached guide; only one frontend request fetches remote XMLTV."""
+        """Keep network operations server-side and share the cached result."""
         if time.monotonic() >= self._next_refresh:
             async with self._lock:
                 if time.monotonic() >= self._next_refresh:
@@ -54,43 +81,45 @@ class TotalplayGuideView(HomeAssistantView):
         return self.json(self._guide)
 
     async def _download(self, url: str) -> dict:
-        """Bound download and parsing resources, independent of browser CORS."""
+        """Bound transfer, decompression, parse work and per-source wait."""
         session = async_get_clientsession(self._hass)
-        async with session.get(url, timeout=ClientTimeout(total=30)) as response:
+        async with session.get(url, timeout=ClientTimeout(total=14)) as response:
             response.raise_for_status()
             length = response.content_length
             if length is not None and length > MAX_GUIDE_BYTES:
-                raise ValueError("Guide exceeds the XMLTV size limit")
+                raise ValueError("Guide exceeds the XMLTV download size limit")
             raw = await response.content.read(MAX_GUIDE_BYTES + 1)
             if len(raw) > MAX_GUIDE_BYTES:
-                raise ValueError("Guide exceeds the XMLTV size limit")
-        parsed = await self._hass.async_add_executor_job(parse_xmltv, raw)
+                raise ValueError("Guide exceeds the XMLTV download size limit")
+        parsed = await self._hass.async_add_executor_job(_parse_guide_bytes, raw)
         if not parsed["channels"] or not parsed["programme_count"]:
             raise ValueError("Guide contains no usable channels or programmes")
         return parsed
 
     async def _refresh(self) -> None:
-        """Try a second public guide when the primary fails; preserve existing data."""
+        """Try independent feeds, retain prior results when every source fails."""
         errors = []
         for index, url in enumerate(GUIDE_SOURCES):
             try:
                 parsed = await self._download(url)
-                # An XMLTV file with only historical listings should not stop
-                # us from trying an independent provider with live programmes.
                 if not parsed.get("window_programme_count"):
                     raise ValueError("No programmes in the current eight-hour window")
-                self._guide = {**parsed, "error": None, "source": url, "fallback": index > 0}
+                self._guide = {
+                    **parsed, "error": None, "source": url,
+                    "source_name": ("EPGshare Mexico MX1" if index == 0 else
+                                    "IPTV-EPG Mexico" if index == 1 else "IPTV-org Mexico"),
+                    "fallback": index > 0, "source_errors": errors,
+                    "using_cached_guide": False,
+                }
                 self._next_refresh = time.monotonic() + _CACHE_SECONDS
                 if index:
-                    _LOGGER.info("Totalplay EPG using the alternative Mexican XMLTV source")
+                    _LOGGER.info("Totalplay EPG using alternative source %s", index + 1)
                 return
-            except Exception as exc:  # Optional EPG never blocks decoder control.
+            except Exception as exc:  # Optional guide must never block STB commands.
                 reason = _error_description(exc)
                 _LOGGER.warning("Totalplay XMLTV provider %s unavailable: %s", index + 1, reason)
                 errors.append(f"provider {index + 1}: {reason}")
 
-        # Preserve the previous guide if it exists; the UI filters expired
-        # programmes by their timestamps and never invents a current schedule.
         self._guide = {
             **self._guide,
             "error": "EPG download failed (" + "; ".join(errors) + ")",
