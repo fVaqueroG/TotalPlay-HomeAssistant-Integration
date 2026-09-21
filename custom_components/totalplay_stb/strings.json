@@ -1,0 +1,21 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Totalplay STB local remote",
+        "description": "Experimental HTTP remote based on Totalplay Control 1.2.28. A successful connection does not prove remote commands will work.",
+        "data": {
+          "host": "Decoder IP address",
+          "port": "HTTP port"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Could not reach this IP address and port",
+      "invalid_host": "Enter a private IPv4 address"
+    },
+    "abort": {
+      "already_configured": "This decoder is already configured"
+    }
+  }
+}
