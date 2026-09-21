@@ -1,29 +1,19 @@
 # Totalplay STB Local Remote & Media Player (experimental)
 
-A community Home Assistant custom integration for local HTTP remote-control commands on a **Totalplay Sagemcom DIW362 UHD** set-top box. The request paths and key names were recovered by inspecting the owner's Totalplay Control Android app. **The command protocol has not yet been verified on a physical decoder.** This project is not affiliated with Totalplay or Sagemcom.
+A community Home Assistant custom integration for local HTTP control of the **Totalplay Sagemcom DIW362 UHD** set-top box. The command paths and keys were recovered from Totalplay Control 1.2.28. The owner confirmed that `volume_up` and `channel_up` take effect on a DIW362 UHD at port 80. This project is not affiliated with Totalplay or Sagemcom.
 
-## HACS installation
+## HACS installation and updates
 
-1. In Home Assistant, open **HACS → ⋮ → Custom repositories** (the menu location may vary by HACS version).
-2. Add `https://github.com/fVaqueroG/TotalPlay-HomeAssistant-Integration` with category **Integration**.
-3. Find and download **Totalplay STB Local Remote**, then restart Home Assistant.
-4. Go to **Settings → Devices & services → Add integration → Totalplay STB Local Remote**, and enter the decoder's local IPv4 address and HTTP port (default: `80`).
+1. In Home Assistant, open **HACS → ⋮ → Custom repositories** (menu location may vary).
+2. Add `https://github.com/fVaqueroG/TotalPlay-HomeAssistant-Integration` as an **Integration**.
+3. Download **Totalplay STB Local Remote** and restart Home Assistant.
+4. Go to **Settings → Devices & services → Add integration → Totalplay STB Local Remote**; enter the STB's local IPv4 address and port (default `80`).
 
-If you already installed a prior version, update through HACS and restart Home Assistant. The existing configuration should load the additional media player automatically.
-
-## Before installing: test a remote command
-
-From Home Assistant's terminal, while a menu is displayed on the decoder:
-
-```sh
-curl -i --max-time 5 'http://DECODER_IP/RemoteControl/KeyHandling/sendKey?key=up'
-```
-
-Replace `DECODER_IP` with your decoder's private IP address. If the on-screen selection moves up, the endpoint works. HTTP 200 alone is not proof that a button press succeeded; HTTP 401/403 may indicate pairing or authorization requirements. Do not expose the decoder's HTTP port to the internet.
+For updates, select the latest versioned release in HACS and restart Home Assistant. Existing configuration and entity IDs should be preserved. Do not expose your decoder's HTTP port to the internet.
 
 ## Remote entity
 
-The `remote` entity provides navigation, power toggle (`on_off`), channels, volume, playback, menu, guide, and digit commands where accepted by the decoder. Under **Developer Tools → Actions**, for example:
+The `remote` entity provides direction keys, select, back, channel and volume steps, power toggle (`on_off`), playback toggles, menu, guide and digits where supported by the firmware. For example:
 
 ```yaml
 action: remote.send_command
@@ -33,29 +23,33 @@ data:
   command: channel_up
 ```
 
-Replace the example entity ID with the actual entity ID Home Assistant creates. Supported keys include `up`, `down`, `left`, `right`, `ok`, `back`, `channel_up`, `channel_down`, `volume_up`, `volume_down`, `mute`, `play_pause`, `stop`, `on_off`, `next`, `prev`, `KEY_MENU`, `KEY_GUIDE`, and digits `0`–`9`. Additional keys and aliases are in [`const.py`](custom_components/totalplay_stb/const.py).
+Use the actual remote entity ID under **Settings → Devices & services → Totalplay STB → Entities**. Full key list and aliases: [`const.py`](custom_components/totalplay_stb/const.py).
 
-## Media player entity (new in v0.2.0)
+## Media player entity (v0.2.0 and later)
 
-A `media_player` entity shares the same Home Assistant device with the remote. It supports volume up/down, channel up/down (mapped to media next/previous track), the STB's Stop button, and numeric channel selection via `media_player.play_media` with `media_content_type: channel`. For example, to request channel 101:
+The `media_player` entity shares the same Home Assistant device as the remote. It supports volume up/down, channel up/down (mapped to media next/previous track), Stop and numeric channel selection. For example:
 
 ```yaml
 action: media_player.play_media
 target:
-  entity_id: media_player.totalplay_diw362_uhd_media_player
+  entity_id: media_player.living_room_totalplay_diw362_uhd_media_player
 data:
   media_content_type: channel
   media_content_id: '101'
 ```
 
-Replace the example entity ID with the actual one under **Settings → Devices & services → Totalplay STB → Entities**. Channel digits are sent in order with a short delay; the integration does **not** append OK or confirm the decoder switched to that channel. The `last_requested_channel` attribute is only what Home Assistant requested, **not** a reading of the current channel.
+Replace the example entity ID if Home Assistant assigned another one. Digits are sent in order with a short delay; the integration does not append OK. `last_requested_channel` is the requested channel, not confirmed feedback from the decoder.
 
-**Important state limitations:** The HTTP command endpoint has not been proven to expose actual decoder power, playback, volume level, or currently tuned channel. The media player intentionally reports **unknown** state instead of inventing on/off or playing status. It does not advertise separate turn_on/turn_off, play/pause, volume_set, or mute_set actions because the recovered on_off, play_pause and mute keys are **toggles**, not discrete commands, and no current state can be verified. Use `remote.send_command` with `on_off`, `play_pause`, or `mute` when you explicitly want a toggle. The media player cannot play external video URLs, and does not provide live TV channel names or program art yet.
+## v0.2.1: malformed HTTP header compatibility
 
-This entity is suitable for command-based dashboards and automation experiments, but generic media-player cards and external software may disable controls if they require a known ON/PLAYING state. For full UI power controls and live channel information we need a verified, read-only status endpoint from this firmware or an independently measured power-state entity.
+Some DIW362 firmware sends an invalid HTTP response header, such as `Cache-Control : no-cache, private` (extra space before the colon). Earlier versions used a strict HTTP client: the decoder *executed* Volume Up or Channel Up, but Home Assistant raised `Invalid header token`. The first digit of a requested channel was sent, then the error aborted the remainder.
 
-## Troubleshooting and updates
+Starting in v0.2.1, the remote and media player use a shared, minimal HTTP transport that checks the response status line without parsing those broken headers. A real non-2xx HTTP status or missing status line still produces an error. **The integration does not retry an ambiguous command**, as doing so could press a button twice. This change allows subsequent channel digits to be sent when the decoder responds with a successful status and malformed headers. Regression tests cover the broken header, a three-digit channel sequence, a genuine 403 response and an invalid status line.
 
-The configuration form checks TCP reachability only, not API compatibility. Keep your original Totalplay remote or app available. If a command fails, open an issue with the HTTP status, relevant Home Assistant log lines, your decoder model and firmware (if known), and whether the official Totalplay app works. Remove personal information, cookies and account identifiers first. HACS uses the repository's published GitHub releases (`v0.2.0`, etc.) to detect updates.
+## Limitations
 
-Contributions and test reports for other Totalplay decoder models are welcome, but no other models are confirmed compatible.
+The current command endpoint does not provide verified STB power, current channel, playback or numeric volume state. The media player intentionally reports an unknown state. Its power, play/pause and mute keys are toggles, so separate media-player On/Off and Play/Pause actions are not advertised; use `remote.send_command` to explicitly send `on_off`, `play_pause` or `mute`. Generic media-player cards may disable controls that require a known ON/PLAYING state. Live channel names and program art are not yet available.
+
+## Troubleshooting
+
+A successful TCP connection does not prove the command API is available. If a command fails, provide the HTTP status or Home Assistant log details, decoder model and firmware, and whether the official Totalplay app works. Remove personal information, tokens and account IDs before sharing logs. Contributions and test reports for other Totalplay models are welcome; they are not yet confirmed compatible.
