@@ -10,7 +10,7 @@ class MenuExitTimingTests(unittest.TestCase):
         self.assertEqual(player_module._MENU_EXIT_DELAY_SECS, 0.10)
 
     def test_channel_digit_and_app_launch_delays_are_unchanged(self):
-        self.assertEqual(player_module._CHANNEL_DIGIT_DELAY_SECS, 0.10)
+        self.assertEqual(player_module._CHANNEL_DIGIT_DELAY_SECS, 0.05)
         self.assertEqual(player_module._APP_LAUNCH_WAIT_SECS, 5.0)
 
 

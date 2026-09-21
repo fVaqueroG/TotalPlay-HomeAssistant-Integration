@@ -27,7 +27,7 @@ from .http import async_send_key
 # tune the numbered channel, wait for its screen, press OK. Netflix channel 333
 # has been physically verified; other app numbers are supplied by the user.
 _NETFLIX_CHANNEL = "333"
-_CHANNEL_DIGIT_DELAY_SECS = 0.10
+_CHANNEL_DIGIT_DELAY_SECS = 0.05
 _MENU_EXIT_DELAY_SECS = 0.10
 _APP_LAUNCH_WAIT_SECS = 5.0
 _NETFLIX_LAUNCH_WAIT_SECS = _APP_LAUNCH_WAIT_SECS  # Legacy test alias.

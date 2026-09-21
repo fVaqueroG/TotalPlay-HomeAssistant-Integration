@@ -108,8 +108,8 @@ class TotalplayPlayerTests(unittest.IsolatedAsyncioTestCase):
     async def test_netflix_exits_menu_sends_333_then_waits_then_ok(self):
         events = await self._record("app", "Netflix")
         self.assertEqual(events, _MENU_ESCAPE + [
-            ("key", "3"), ("sleep", 0.1), ("key", "3"),
-            ("sleep", 0.1), ("key", "3"),
+            ("key", "3"), ("sleep", 0.05), ("key", "3"),
+            ("sleep", 0.05), ("key", "3"),
             ("sleep", player_module._APP_LAUNCH_WAIT_SECS), ("key", "ok"),
         ])
         self.hass.services.async_call.assert_not_awaited()
@@ -118,16 +118,16 @@ class TotalplayPlayerTests(unittest.IsolatedAsyncioTestCase):
     async def test_short_channel_exits_menu_and_zero_pads_without_ok(self):
         events = await self._record("channel", "7")
         self.assertEqual(events, _MENU_ESCAPE + [
-            ("key", "0"), ("sleep", 0.1), ("key", "0"),
-            ("sleep", 0.1), ("key", "7"),
+            ("key", "0"), ("sleep", 0.05), ("key", "0"),
+            ("sleep", 0.05), ("key", "7"),
         ])
         self.assertEqual(self.player.extra_state_attributes["last_requested_channel"], "007")
 
     async def test_two_digit_app_channel_padded_before_ok(self):
         events = await self._record("app", "12")
         self.assertEqual(events, _MENU_ESCAPE + [
-            ("key", "0"), ("sleep", 0.1), ("key", "1"),
-            ("sleep", 0.1), ("key", "2"),
+            ("key", "0"), ("sleep", 0.05), ("key", "1"),
+            ("sleep", 0.05), ("key", "2"),
             ("sleep", player_module._APP_LAUNCH_WAIT_SECS), ("key", "ok"),
         ])
 
