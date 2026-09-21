@@ -47,6 +47,7 @@ class Features:
     NEXT_TRACK = 4
     PREVIOUS_TRACK = 8
     STOP = 16
+    SELECT_SOURCE = 32
 
 
 class Entity:
@@ -74,7 +75,10 @@ class TotalplayPlayerTests(unittest.IsolatedAsyncioTestCase):
             options={"tv_entity": self.tv_entity, "tv_source": "HDMI 2"},
         )
         self.tv_state = types.SimpleNamespace(
-            state="on", attributes={"source": "HDMI 2", "source_list": ["HDMI 1", "HDMI 2"]}
+            state="on", attributes={
+                "source": "HDMI 2", "source_list": ["HDMI 1", "HDMI 2"],
+                "supported_features": Features.SELECT_SOURCE,
+            }
         )
         self.hass = types.SimpleNamespace(
             states=types.SimpleNamespace(get=lambda eid: self.tv_state if eid == self.tv_entity else None),
@@ -135,6 +139,20 @@ class TotalplayPlayerTests(unittest.IsolatedAsyncioTestCase):
             {"entity_id": self.tv_entity, "source": "HDMI 2"}, blocking=True,
         )
         self.assertEqual([e[1] for e in events if e[0] == "key"], ["1", "0", "1"])
+
+    async def test_unsupported_source_selection_does_not_block_channel(self):
+        self.tv_state.attributes["source"] = "HDMI 1"
+        self.tv_state.attributes["supported_features"] = 0
+        events = await self._record("channel", "101")
+        self.hass.services.async_call.assert_not_awaited()
+        self.assertEqual([e[1] for e in events if e[0] == "key"], ["1", "0", "1"])
+
+    async def test_source_selection_service_rejection_does_not_block_app(self):
+        self.tv_state.attributes["source"] = "HDMI 1"
+        self.hass.services.async_call.side_effect = errors.HomeAssistantError("select_source unsupported")
+        events = await self._record("app", "netflix")
+        self.hass.services.async_call.assert_awaited_once()
+        self.assertEqual([e[1] for e in events if e[0] == "key"], ["3", "3", "3", "ok"])
 
     async def test_unknown_source_never_switches_blindly(self):
         self.tv_state.attributes.pop("source")
