@@ -89,7 +89,7 @@ class _LimitedXmlReader:
             data = bytes(preamble)
             lower = data.lower()
             if b"<!entity" in lower:
-                raise ValueError("XMLTV document contains a forbidden entity declaration")
+                raise ValueError("XMLTV document contains a forbidden DTD or entity declaration")
             if b"<!doctype" in lower:
                 match = _SAFE_XMLTV_DOCTYPE.search(data)
                 if (match is None or match.start() >= (_ROOT_OPEN.search(data) or match).start()
