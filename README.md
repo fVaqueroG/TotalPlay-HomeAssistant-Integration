@@ -1,74 +1,61 @@
 # Totalplay STB Local Remote & Media Player (experimental)
 
-A community Home Assistant custom integration for local HTTP control of the **Totalplay Sagemcom DIW362 UHD** set-top box. The command paths and keys were recovered from Totalplay Control 1.2.28. Channel selection, volume and launching Netflix from channel 333 with `ok` have been tested on the owner's DIW362 UHD at port 80. Not affiliated with Totalplay or Sagemcom.
+Community Home Assistant integration for local HTTP control of the **Totalplay Sagemcom DIW362 UHD** decoder. Not affiliated with Totalplay or Sagemcom. The owner confirmed channel changes and volume controls, plus Netflix launch through channel 333 followed by `ok`. No channel-state feedback or live EPG has been verified from the decoder.
 
-## HACS installation and updates
+## Install and connected-TV configuration
 
-1. In Home Assistant, add `https://github.com/fVaqueroG/TotalPlay-HomeAssistant-Integration` under **HACS → Custom repositories → Integration**.
-2. Download the latest tagged release in HACS and restart Home Assistant.
-3. Under **Settings → Devices & services**, add **Totalplay STB Local Remote** and enter the decoder IP and port (default `80`).
-4. The next configuration screens let you select the **TV/media player physically displaying the STB**, followed by the correct **HDMI/source**. The source dropdown uses that media player's reported `source_list` where available. Linking a display is optional.
+Add `https://github.com/fVaqueroG/TotalPlay-HomeAssistant-Integration` in **HACS → Custom repositories → Integration**. Install the latest versioned release and restart Home Assistant. Add **Totalplay STB Local Remote** under **Settings → Devices & services**, supplying the decoder's private IPv4 address and its HTTP port (usually `80`).
 
-**Already installed?** After updating, go to **Settings → Devices & services → Totalplay STB Local Remote → Configure** to choose or change the attached TV and its HDMI input. Do not remove and re-add the decoder: the integration retains its existing entity IDs. The media-player entity exposes the `connected_tv_entity` and `connected_tv_source` attributes for dashboard use.
+The setup and **Configure** options let you link the **TV/media player to which the decoder is physically connected**, and select the TV's HDMI input. These are optional for existing installations; updating does not require deleting the decoder. Before a channel or app action, the integration checks the TV's reported current input. It selects the configured input **only when the TV positively reports a different one**. When the TV is off or its input is unknown, it does not switch inputs blindly. Navigation, volume, and Stop remote actions do not force input changes.
 
-**Source check:** Before launching an app or selecting/changing a TV channel through the Totalplay `media_player`, the integration checks the attached TV's reported `source`. If it already matches, it does **nothing** to the TV. If it positively reports a different source, the integration requests `media_player.select_source` once before sending Totalplay commands. If the TV's state or source is unknown or the TV is off, the integration does **not** blindly switch inputs or power it on. Volume and Stop actions do not switch TV inputs. This behavior requires that the chosen TV media player report its current `source` accurately. TV input changes are not verified by the STB itself.
+Never expose the decoder's local HTTP port to the internet.
 
-Do not expose your decoder's HTTP port to the internet.
+## Channels, apps and remote dashboard card (v0.2.3+)
 
-## Totalplay Channels & Apps dashboard card (v0.2.2+)
-
-The card is included with the integration and served at `/totalplay_stb/totalplay-stb-card.js`. After updating and restarting Home Assistant, open **Settings → Dashboards → Resources**, add that URL as a **JavaScript module**, and refresh the dashboard. Add a manual/YAML card with:
+Add `/totalplay_stb/totalplay-stb-card.js` under **Settings → Dashboards → Resources** as a **JavaScript module** and refresh the dashboard. Then add a manual YAML card. Set the actual `remote` entity ID from your Totalplay device's Entities list:
 
 ```yaml
 type: custom:totalplay-stb-card
 entity: media_player.living_room_totalplay_diw362_uhd_media_player
+remote: remote.living_room_totalplay_diw362_uhd_remote
 title: Totalplay TV
 channels:
+  - number: '1'
+    name: Channel 1
   - number: '101'
     name: Channel 101
-  - number: '333'
-    name: Netflix launch channel
 apps:
   - id: netflix
     name: Netflix
+    number: '333'
+  # Add other Totalplay app channels using their actual published numbers:
+  # - id: another_app
+  #   name: Another App
+  #   number: 'YOUR_APP_CHANNEL_NUMBER'
 ```
 
-Customize `channels` with your **actual** channel numbers and names; the sample is not an authoritative Totalplay channel guide. Tapping a channel sends `media_player.play_media` with `media_content_type: channel`. Tapping Netflix sends `media_content_type: app`, `media_content_id: netflix`. Both use the TV input check described above. Other app tiles are disabled unless a separate app launch sequence has been verified and implemented.
+**The examples are not a complete or verified Totalplay channel list.** Add the channels and apps from your decoder's actual lineup. App tiles with a valid numeric `number` send that channel, wait five seconds for its launch screen, then send `ok`, as described by the owner for the Totalplay app channels. An app tile without a configured channel number remains disabled. The five-second timing, as well as the shorter channel-entry timing, should be checked on the physical device. Netflix's channel number 333 and its separate OK launch command were confirmed on the physical decoder.
 
-### Real TV program information (optional EPG sensors)
+Tap **Remote** in the card header to reveal three views: **Navigation** (D-pad/OK, menu, guide, Back, channel/volume, mute and power toggle), **Playback** (rewind, play/pause, forward, previous/next, stop, audio) and **Keypad** (0–9, previous channel and delete). The remote commands go to the decoder's `remote` entity, not the connected TV, and do not change its HDMI input. The Previous key defaults to `KEY_TV_SWAP`; if it does not reproduce the official app's *canal previo* button, change `previous_channel_command` to the correct verified decoder key. Power is a toggle because decoder power-state feedback is unavailable.
 
-The decoder's current HTTP command API has **not** been shown to return a channel guide, current program, or current channel. The card therefore does not fabricate them. If you already have TV-guide sensors in Home Assistant, add `program_entity` to each channel to show its **actual current program** from that sensor's state or a `current_program`, `program_title`, `program` or `title` attribute:
+**Complete channels are entered with at least three digits at 100 ms spacing:** `1` becomes `001`, `12` becomes `012`, `101` stays `101`, and a four-digit channel stays four digits. This applies both to channel tiles/`media_player.play_media` channel actions and numbered app launches. Individual number-pad button presses send exactly the one digit selected, without automatic padding. App launches still wait five seconds **after** the final channel digit before sending OK.
+
+### Live TV programs
+
+To display a channel's actual program title, set `program_entity` on that channel to an existing Home Assistant TV-guide sensor. The card reads its `current_program`, `program_title`, `program`, or `title` attribute, or its state. Example:
 
 ```yaml
-type: custom:totalplay-stb-card
-entity: media_player.living_room_totalplay_diw362_uhd_media_player
 channels:
   - number: '101'
     name: Channel 101
-    program_entity: sensor.my_channel_101_now_playing
-  - number: '102'
-    name: Channel 102
-    program_entity: sensor.my_channel_102_now_playing
-apps:
-  - id: netflix
-    name: Netflix
+    program_entity: sensor.channel_101_now_playing
 ```
 
-Replace those **example** sensor IDs with entities that actually exist; this integration does not create EPG sensors. Without a configured/live sensor, the card displays **Program information unavailable**. The selected TV source is shown in the card header when available.
+This is an **example** sensor, not one created by this integration. The Totalplay lineup website provides channel information but we have not verified a full machine-readable lineup or a decoder EPG endpoint. Channels without matching real EPG sensors display **Program information unavailable** instead of made-up programming.
 
-## Remote and media player actions
+## Home Assistant service examples
 
-The `remote` entity provides directional keys, select, back, channel and volume steps, power toggle (`on_off`), menu, guide and digit keys where supported by the firmware. Example:
-
-```yaml
-action: remote.send_command
-target:
-  entity_id: remote.totalplay_stb_remote
-data:
-  command: channel_up
-```
-
-The `media_player` entity supports volume up/down, channel up/down (mapped to media next/previous track), Stop and numeric channel selection:
+Select a channel (the integration pads 1 and 2 digit numbers automatically):
 
 ```yaml
 action: media_player.play_media
@@ -76,14 +63,10 @@ target:
   entity_id: media_player.living_room_totalplay_diw362_uhd_media_player
 data:
   media_content_type: channel
-  media_content_id: '101'
+  media_content_id: '12'
 ```
 
-The `last_requested_channel` entity attribute is **not** confirmation of which channel is tuned.
-
-## Netflix launch (v0.2.2+)
-
-On the owner's DIW362 UHD, selecting channel 333 displays a Netflix launch screen; sending `key=ok` once that screen has loaded opens Netflix. The combined media player action:
+Launch Netflix using its confirmed channel 333 shortcut:
 
 ```yaml
 action: media_player.play_media
@@ -94,12 +77,18 @@ data:
   media_content_id: netflix
 ```
 
-sends `3`, `3`, `3`, **waits five seconds**, then sends `ok`. The individual channel/OK commands were confirmed on the physical decoder; the automatic five-second launch timing still needs an end-to-end test. This opens Netflix only—it does not select a profile or play a title.
+Other app launches accept their **numeric Totalplay channel number** instead of `netflix` as `media_content_id`. This opens an app, not a specific title. To press a decoder key directly:
 
-## Decoder HTTP response compatibility (v0.2.1+)
+```yaml
+action: remote.send_command
+target:
+  entity_id: remote.living_room_totalplay_diw362_uhd_remote
+data:
+  command: ok
+```
 
-Some firmware replies with an invalid HTTP response header (`Cache-Control : no-cache, private`). The integration checks the HTTP status line and does not parse that malformed header; genuine non-2xx status responses still fail, and ambiguous commands are not retried. The owner confirmed that three-digit channel selection, Volume Up, and Channel Up work without the previous Home Assistant error on v0.2.1.
+Use the actual entity IDs in your Home Assistant installation. `last_requested_channel` reports the last *requested* channel, not a verified current channel. Power, playback, numeric volume, current channel, and actual current TV program are not readable through the confirmed command endpoint. Some generic media-player cards may disable controls while the media player state is unknown; use the bundled card for command-only operation.
 
-## Limitations
+## HTTP compatibility
 
-Power, playback, channel identity, numeric volume and live program details are not confirmed readable from the decoder, so the media player reports an unknown state rather than inventing it. Its power, play/pause and mute commands are toggles; use `remote.send_command` with `on_off`, `play_pause` or `mute` where explicitly intended. Some generic media-player cards disable controls when state is unknown; use the bundled channels/apps card for command-based control. If you encounter an error, include sanitized Home Assistant logs and decoder model/firmware in a GitHub issue.
+Some DIW362 firmware returns malformed headers such as `Cache-Control : no-cache, private`. The integration's HTTP transport checks the response status line without parsing these headers and does **not** retry ambiguous commands, which could press a key twice. Genuine non-2xx responses remain errors. Regression tests cover this behavior.
