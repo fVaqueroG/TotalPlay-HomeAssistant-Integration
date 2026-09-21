@@ -1,5 +1,5 @@
 /* Totalplay card v0.3.10: correct HBO Max label and TMDB artwork. */
-import './totalplay-stb-v037.js?v=0.3.10';
+import './totalplay-stb-v038.js?v=0.3.10';
 
 const TotalplayHboCard = customElements.get('totalplay-stb-card');
 if (!TotalplayHboCard) throw new Error('Totalplay card did not load');
