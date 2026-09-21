@@ -22,6 +22,12 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from .const import DOMAIN
 from .http import async_send_key
 
+# Confirmed on the owner's DIW362 UHD: channel 333 shows a Netflix launch
+# screen, then the center D-pad / `ok` key opens Netflix. The wait allows the
+# channel to tune and the app-launch screen to become ready before pressing OK.
+_NETFLIX_CHANNEL = "333"
+_NETFLIX_LAUNCH_WAIT_SECS = 5.0
+
 
 async def async_setup_entry(
     hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback
@@ -31,7 +37,7 @@ async def async_setup_entry(
 
 
 class TotalplayMediaPlayer(MediaPlayerEntity):
-    """Expose channel and volume keys without inventing decoder state."""
+    """Expose channel, volume and confirmed Netflix launch commands."""
 
     _attr_has_entity_name = True
     _attr_name = "Media Player"
@@ -51,6 +57,7 @@ class TotalplayMediaPlayer(MediaPlayerEntity):
         self._host = entry.data[CONF_HOST]
         self._port = entry.data[CONF_PORT]
         self._last_requested_channel: str | None = None
+        self._command_lock = asyncio.Lock()
         # Preserve entity registry IDs when updating from v0.2.0.
         self._attr_unique_id = f"{DOMAIN}_{self._host}_{self._port}_media_player"
         self._attr_device_info = {
@@ -74,29 +81,52 @@ class TotalplayMediaPlayer(MediaPlayerEntity):
                 await asyncio.sleep(0.35)
 
     async def async_volume_up(self) -> None:
-        await self._send_keys(["volume_up"])
+        async with self._command_lock:
+            await self._send_keys(["volume_up"])
 
     async def async_volume_down(self) -> None:
-        await self._send_keys(["volume_down"])
+        async with self._command_lock:
+            await self._send_keys(["volume_down"])
 
     async def async_media_next_track(self) -> None:
-        await self._send_keys(["channel_up"])
+        async with self._command_lock:
+            await self._send_keys(["channel_up"])
 
     async def async_media_previous_track(self) -> None:
-        await self._send_keys(["channel_down"])
+        async with self._command_lock:
+            await self._send_keys(["channel_down"])
 
     async def async_media_stop(self) -> None:
-        await self._send_keys(["stop"])
+        async with self._command_lock:
+            await self._send_keys(["stop"])
 
     async def async_play_media(
         self, media_type: MediaType | str, media_id: str, **kwargs: Any
     ) -> None:
-        """Select a numbered TV channel using individual digit keys."""
+        """Select a numbered TV channel, or launch Netflix via channel 333.
+
+        The Netflix command launches its app, not an individual movie or show.
+        """
+        if media_type in ("app", "application"):
+            if str(media_id).strip().casefold() != "netflix":
+                raise HomeAssistantError("Only the Netflix app has a confirmed launch sequence")
+            async with self._command_lock:
+                await self._send_keys(list(_NETFLIX_CHANNEL))
+                # An immediate OK can be ignored while the launch channel loads.
+                await asyncio.sleep(_NETFLIX_LAUNCH_WAIT_SECS)
+                await self._send_keys(["ok"])
+                self._last_requested_channel = _NETFLIX_CHANNEL
+                self.async_write_ha_state()
+            return
+
         if media_type != MediaType.CHANNEL:
-            raise HomeAssistantError("Totalplay supports only media_content_type: channel")
+            raise HomeAssistantError(
+                "Totalplay supports media_content_type: channel, or app with media_content_id: netflix"
+            )
         channel = str(media_id).strip()
         if re.fullmatch(r"[0-9]{1,4}", channel) is None or int(channel) == 0:
             raise HomeAssistantError("Channel must be a number between 1 and 9999")
-        await self._send_keys(list(channel))
-        self._last_requested_channel = channel
-        self.async_write_ha_state()
+        async with self._command_lock:
+            await self._send_keys(list(channel))
+            self._last_requested_channel = channel
+            self.async_write_ha_state()
