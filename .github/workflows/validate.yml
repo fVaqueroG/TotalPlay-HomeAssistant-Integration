@@ -22,6 +22,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Check Python syntax
-        run: python -m compileall -q custom_components/totalplay_stb
+        run: python -m compileall -q custom_components/totalplay_stb tests
+      - name: Test Totalplay HTTP transport
+        run: python -m unittest discover -s tests -v
       - name: Validate with hassfest
         uses: home-assistant/actions/hassfest@master
