@@ -1,19 +1,17 @@
-"""Local HTTP remote for Totalplay set-top boxes (experimental)."""
+"""Local HTTP remote and command-only media player for Totalplay STBs."""
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 
-from .const import DOMAIN
-
-PLATFORMS = ["remote"]
+PLATFORMS = ["remote", "media_player"]
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
-    """Set up a decoder configured through the UI."""
+    """Set up the decoder's remote and media player from the same config entry."""
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     return True
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
-    """Unload a decoder."""
+    """Unload both decoder entities."""
     return await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
