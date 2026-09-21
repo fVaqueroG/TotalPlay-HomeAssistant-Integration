@@ -73,7 +73,7 @@ assert.equal(card._remotePortal.hidden,false,'Remote toolbar button opens popup'
 assert.equal(card._tab,'apps','Opening remote does not change pages');
 assert.equal(card._remoteTab.attrs['aria-expanded'],'true');
 assert.ok(allListeners.has('keydown'));
-card._remotePortal.shadowRoot.querySelector('.tp-remote-close').fire('click');
+card._remote.head.querySelector('.tp-remote-close').fire('click');
 assert.equal(card._remotePortal.hidden,true,'Close button dismisses remote');
 assert.equal(card._tab,'apps','Closing remote returns to prior page');
 assert.equal(allListeners.has('keydown'),false,'Closing remote cleans up Escape listener');
