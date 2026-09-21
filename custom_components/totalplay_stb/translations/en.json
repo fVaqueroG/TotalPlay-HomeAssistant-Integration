@@ -3,19 +3,55 @@
     "step": {
       "user": {
         "title": "Totalplay STB local remote",
-        "description": "Experimental HTTP remote based on Totalplay Control 1.2.28. A successful connection does not prove remote commands will work.",
+        "description": "Configure your decoder's local connection. The TV/HDMI input is selected in the next step.",
         "data": {
           "host": "Decoder IP address",
           "port": "HTTP port"
+        }
+      },
+      "display": {
+        "title": "Connected television",
+        "description": "Select the TV or media player that displays this decoder's HDMI output. Leave blank if it is not available in Home Assistant.",
+        "data": {
+          "tv_entity": "Connected TV / display media player"
+        }
+      },
+      "source": {
+        "title": "Totalplay input on TV",
+        "description": "Select the HDMI/input that the Totalplay decoder is connected to. It will be selected only if the TV reports a different current source.",
+        "data": {
+          "tv_source": "Connected TV input / HDMI source"
         }
       }
     },
     "error": {
       "cannot_connect": "Could not reach this IP address and port",
-      "invalid_host": "Enter a private IPv4 address"
+      "invalid_host": "Enter a private IPv4 address",
+      "invalid_source": "Select a non-empty TV input"
     },
     "abort": {
       "already_configured": "This decoder is already configured"
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Connected television",
+        "description": "Choose the TV or media player connected to your Totalplay decoder. Leave blank to disable automatic input selection.",
+        "data": {
+          "tv_entity": "Connected TV / display media player"
+        }
+      },
+      "source": {
+        "title": "Totalplay input on TV",
+        "description": "Select the HDMI/input for the Totalplay decoder. The integration will check the current source before changing it.",
+        "data": {
+          "tv_source": "Connected TV input / HDMI source"
+        }
+      }
+    },
+    "error": {
+      "invalid_source": "Select a non-empty TV input"
     }
   }
 }
