@@ -1,6 +1,6 @@
 # Totalplay STB Local Remote & Media Player (experimental)
 
-A community Home Assistant custom integration for local HTTP control of the **Totalplay Sagemcom DIW362 UHD** set-top box. The command paths and keys were recovered from Totalplay Control 1.2.28. The owner confirmed that `volume_up` and `channel_up` take effect on a DIW362 UHD at port 80. This project is not affiliated with Totalplay or Sagemcom.
+A community Home Assistant custom integration for local HTTP control of the **Totalplay Sagemcom DIW362 UHD** set-top box. The command paths and keys were recovered from Totalplay Control 1.2.28. The owner confirmed channel selection, volume, channel up, and launching Netflix from channel 333 with `ok` on a DIW362 UHD at port 80. This project is not affiliated with Totalplay or Sagemcom.
 
 ## HACS installation and updates
 
@@ -38,7 +38,24 @@ data:
   media_content_id: '101'
 ```
 
-Replace the example entity ID if Home Assistant assigned another one. Digits are sent in order with a short delay; the integration does not append OK. `last_requested_channel` is the requested channel, not confirmed feedback from the decoder.
+Replace the example entity ID if Home Assistant assigned another one. Digits are sent in order with a short delay; the integration does not append OK for ordinary channel selection. `last_requested_channel` is the requested channel, not confirmed feedback from the decoder.
+
+## Netflix launch (v0.2.2 and later)
+
+On the owner's DIW362 UHD, entering channel 333 opens a Netflix launch screen, and the **center D-pad button** of the official Totalplay Control app launches Netflix. The center D-pad button sends the API key `ok`. The decoder ignored an earlier immediate OK, but a direct `key=ok` request once the launch screen was displayed successfully launched Netflix.
+
+To perform the confirmed sequence from Home Assistant with one action:
+
+```yaml
+action: media_player.play_media
+target:
+  entity_id: media_player.living_room_totalplay_diw362_uhd_media_player
+data:
+  media_content_type: app
+  media_content_id: netflix
+```
+
+This sends the three digits of channel 333, waits five seconds for its launch screen to appear, then sends `ok` using the same HTTP command transport as the working remote. The five-second timing is an initial estimate and **must be tested end-to-end** on the physical decoder. If the Netflix launch screen loads too slowly, increase `_NETFLIX_LAUNCH_WAIT_SECS` in `media_player.py` and publish a new integration version. This only opens the Netflix app; it does not select a profile, play a title, or verify whether Netflix was already open. Other apps are not supported without a separately confirmed launch sequence.
 
 ## v0.2.1: malformed HTTP header compatibility
 
