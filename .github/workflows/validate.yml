@@ -34,6 +34,7 @@ jobs:
           node --input-type=module --check < custom_components/totalplay_stb/www/totalplay-guide-layout-v036.js
           node --input-type=module --check < custom_components/totalplay_stb/www/totalplay-app-logos.js
           node --input-type=module --check < custom_components/totalplay_stb/www/totalplay-stb-v038.js
+          node --input-type=module --check < custom_components/totalplay_stb/www/totalplay-stb-v0310.js
       - name: Test IPTV guide, EPG mapping, scrolling, pages, layout and logos
         run: |
           node tests/test_card_guide.js
@@ -43,5 +44,6 @@ jobs:
           node tests/test_pages_remote.cjs
           node tests/test_guide_layout.cjs
           node tests/test_app_logos.cjs
+          node tests/test_hbomax.cjs
       - name: Validate with hassfest
         uses: home-assistant/actions/hassfest@master
