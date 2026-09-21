@@ -28,7 +28,7 @@ from .http import async_send_key
 # has been physically verified; other app numbers are supplied by the user.
 _NETFLIX_CHANNEL = "333"
 _CHANNEL_DIGIT_DELAY_SECS = 0.10
-_MENU_EXIT_DELAY_SECS = 0.35
+_MENU_EXIT_DELAY_SECS = 0.10
 _APP_LAUNCH_WAIT_SECS = 5.0
 _NETFLIX_LAUNCH_WAIT_SECS = _APP_LAUNCH_WAIT_SECS  # Legacy test alias.
 _CHANNEL_PATTERN = re.compile(r"[0-9]{1,4}\Z")
@@ -105,7 +105,7 @@ class TotalplayMediaPlayer(MediaPlayerEntity):
 
         A single channel_up key returns the owner's decoder to live TV even if
         the on-screen menu is open. Keep it within the command lock and allow a
-        short pause before the first digit; do not prepend it to remote key taps.
+        brief pause before the first digit; do not prepend it to remote key taps.
         """
         await async_ensure_display_source(self._hass, self._entry)
         await self._send_keys(["channel_up"])
