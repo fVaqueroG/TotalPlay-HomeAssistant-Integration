@@ -1,4 +1,4 @@
-/* Totalplay Apps logos v0.3.7. App logos are visual only; launch routing is unchanged. */
+/* Totalplay Apps logos v0.3.8. App logos are visual only; launch routing is unchanged. */
 import './totalplay-pages-remote.js?v=0.3.7';
 
 const TP_LOGO_CARD = customElements.get('totalplay-stb-card');
@@ -18,7 +18,6 @@ const TP_CANONICAL_PROVIDERS = Object.freeze({
   netflix: 'netflix', disney: 'disney plus', disneyplus: 'disney plus',
   primevideo: 'amazon prime video', amazonprimevideo: 'amazon prime video',
   max: 'max', hbomax: 'max', paramount: 'paramount plus', paramountplus: 'paramount plus',
-  appletv: 'apple tv plus', appletvplus: 'apple tv plus',
   vix: 'vix', vixpremium: 'vix',
   pluto: 'pluto tv', plutotv: 'pluto tv',
   crunchyroll: 'crunchyroll', mubi: 'mubi',
@@ -33,13 +32,26 @@ const tpValidLogoPath = path => typeof path === 'string' && /^\/[a-zA-Z0-9_-]+\.
 function tpLogoForApp(app, providers) {
   if (!Array.isArray(providers)) return null;
   const explicit = Number(app?.tmdb_provider_id);
-  const target = TP_CANONICAL_PROVIDERS[tpAppName(app?.name)];
-  // A provider is never inferred from a partial name (e.g. Max != Max Amazon Channel).
-  const candidates = providers.filter(p => tpValidLogoPath(p.logo_path) &&
-    (explicit > 0 ? Number(p.provider_id) === explicit :
-      target && tpProviderName(p.provider_name) === tpProviderName(target)));
+  const name = tpAppName(app?.name);
+  const target = TP_CANONICAL_PROVIDERS[name];
+  const valid = providers.filter(p => tpValidLogoPath(p.logo_path));
+  let candidates;
+  if (explicit > 0) {
+    candidates = valid.filter(p => Number(p.provider_id) === explicit);
+  } else if (name === 'appletv' || name === 'appletvplus') {
+    // '+' is stripped during normalization. Use the Apple TV+ subscription
+    // provider ID, never the distinct Apple TV Store purchase/rental service.
+    candidates = valid.filter(p => Number(p.provider_id) === 350);
+  } else if (name === 'youtube') {
+    // Prefer the generic YouTube brand, when TMDB lists it. If the provider
+    // catalog has only YouTube Premium, use its YouTube-branded logo as a
+    // visual fallback; this does not change which Totalplay app launches.
+    candidates = valid.filter(p => tpProviderName(p.provider_name) === 'youtube');
+    if (!candidates.length) candidates = valid.filter(p => tpProviderName(p.provider_name) === 'youtubepremium');
+  } else {
+    candidates = valid.filter(p => target && tpProviderName(p.provider_name) === tpProviderName(target));
+  }
   if (!candidates.length) return null;
-  // Prefer a single exact provider. Duplicate entries with distinct logos are ambiguous.
   const paths = [...new Set(candidates.map(p => p.logo_path))];
   return paths.length === 1 ? `https://image.tmdb.org/t/p/w154${paths[0]}` : null;
 }
@@ -149,7 +161,7 @@ TP_LOGO_CARD.prototype.setConfig = function (config) {
     style.textContent = TP_APP_LOGO_CSS;
     this.shadowRoot.appendChild(style);
   }
-  this.shadowRoot?.querySelector('.tp-version-badge')?.replaceChildren('Card v0.3.7');
+  this.shadowRoot?.querySelector('.tp-version-badge')?.replaceChildren('Card v0.3.8');
   this._renderApps();
   if (this._tab === 'apps') this._loadTmdbLogos();
 };
