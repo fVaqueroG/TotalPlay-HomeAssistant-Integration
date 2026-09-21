@@ -18,8 +18,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     domain_data = hass.data.setdefault(DOMAIN, {})
     if not domain_data.get("card_registered"):
         card_file = Path(__file__).parent / "www" / "totalplay-stb-card.js"
+        lineup_file = Path(__file__).parent / "www" / "lineup.txt"
         await hass.http.async_register_static_paths(
-            [StaticPathConfig(_CARD_URL, str(card_file), False)]
+            [StaticPathConfig(_CARD_URL, str(card_file), False),
+             StaticPathConfig("/totalplay_stb/lineup.txt", str(lineup_file), False)]
         )
         hass.http.register_view(TotalplayGuideView(hass))
         domain_data["card_registered"] = True
