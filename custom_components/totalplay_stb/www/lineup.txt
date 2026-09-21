@@ -1,0 +1,313 @@
+# Community reference only. Not a confirmed customer/package lineup.
+# Factual channel names/numbers transcribed from https://www.tvchannellists.com/w/List_of_channels_on_Totalplay (reviewed 2026-09-21; page last edited 2026-06-15).
+# C|number|name|category ; A|number|app name. Duplicates are alternative launch-channel numbers, not separate app subscriptions.
+C|1|Azteca Uno|Local
+C|2|Las Estrellas|Local
+C|3|Imagen Televisión|Local
+C|5|Canal 5|Local
+C|6|Canal 6|Local
+C|7|Azteca Siete|Local
+C|11|Canal Once|Local
+C|14|Canal Catorce|Local
+C|20|TV UNAM|Local
+C|22|Canal 22|Local
+C|99|Mosaico Televisión Abierta|National
+C|100|Canal Totalplay|National
+C|101|Azteca Uno|National
+C|102|Las Estrellas|National
+C|104|N+ Foro|National
+C|105|Canal 5|National
+C|106|ADN Noticias|National
+C|107|Azteca Siete|National
+C|109|NU9VE|National
+C|110|A Más+|National
+C|111|Totalplay ONDEMAND Preview|National
+C|112|Corazón|National
+C|113|Azteca Uno|National
+C|114|Azteca Uno -2|National
+C|117|Clic|National
+C|119|Inova|National
+C|135|Azteca Uno -1|National
+C|146|Mexiquense Televisión|National
+C|150|El Financiero Bloomberg|National
+C|161|Telefórmula|National
+C|165|VibraTV|National
+C|167|Canal 6 Plus|National
+C|200|Mosaico Entretenimiento|Entertainment
+C|201|Star Channel|Entertainment
+C|203|Sony Channel|Entertainment
+C|205|Warner Channel|Entertainment
+C|207|Universal TV|Entertainment
+C|208|UNIVERSAL+|Entertainment
+C|209|FX|Entertainment
+C|211|A&E|Entertainment
+C|213|AXN|Entertainment
+C|214|Canal Claro|Entertainment
+C|215|Adult Swim|Entertainment
+C|217|Comedy Central|Entertainment
+C|219|Hola TV|Entertainment
+C|220|Rai World Premium|Entertainment
+C|221|AMC Series|Entertainment
+C|222|MyZen TV 4K|Entertainment
+C|223|Museum TV 4K|Entertainment
+C|224|TravelXP|Entertainment
+C|226|Food Network|Entertainment
+C|228|Investigation Discovery|Entertainment
+C|229|FUNBOX UHD|Entertainment
+C|230|AMC Selekt 4K|Entertainment
+C|240|Pasiones|Entertainment
+C|241|Show Business The Channel|Entertainment
+C|242|Torolé TV|Entertainment
+C|250|Corazón|Entertainment
+C|252|Kanal D Drama|Entertainment
+C|255|E!|Entertainment
+C|257|USA Network|Entertainment
+C|260|Popcorn Central|Entertainment
+C|266|TNT Series|Entertainment
+C|268|El Gourmet|Entertainment
+C|269|Garage TV|Entertainment
+C|270|Telemax|Entertainment
+C|273|TNT Novelas|Entertainment
+C|277|Telemundo Internacional|Entertainment
+C|280|Universal Premiere|Entertainment
+C|281|Universal Cinema|Entertainment
+C|282|Universal Comedy|Entertainment
+C|283|Universal Crime|Entertainment
+C|284|Universal Reality|Entertainment
+C|290|Box Gamers|Entertainment
+C|300|Mosaico Niños|Family
+C|301|Baby TV|Family
+C|303|Discovery Kids|Family
+C|304|Totalplay ONDEMAND|Family
+C|305|Moonbug|Family
+C|308|Disney Junior|Family
+C|309|babyfirst|Family
+C|310|Nick Jr.|Family
+C|311|El canal del payaso Plim Plim|Family
+C|312|Disney Channel|Family
+C|315|Nickelodeon|Family
+C|318|KidOO|Family
+C|320|Cartoon Network|Family
+C|322|DreamWorks Channel|Family
+C|324|Cartoonito|Family
+C|326|Duck TV|Family
+C|328|Tooncast|Family
+C|329|Once Niñas y Niños|Family
+C|350|Mosaico Mundo y Aprendizaje|Knowledge
+C|351|Discovery Theater HD|Knowledge
+C|353|History|Knowledge
+C|354|National Geographic|Knowledge
+C|355|Maussan Television|Knowledge
+C|356|Discovery World HD|Knowledge
+C|361|Animal Planet|Knowledge
+C|364|Discovery Turbo|Knowledge
+C|365|HGTV|Knowledge
+C|368|TLC|Knowledge
+C|370|History 2|Knowledge
+C|371|Discovery Channel|Knowledge
+C|374|Discovery Home & Health|Knowledge
+C|375|INTI|Knowledge
+C|379|Lifetime|Knowledge
+C|380|Curiosity Channel|Knowledge
+C|381|Discovery Science|Knowledge
+C|382|Love Nature|Knowledge
+C|384|CaribeTEVE|Knowledge
+C|385|TravelXP 4K|Knowledge
+C|387|WOBI|Knowledge
+C|388|EWTN|Knowledge
+C|389|Daystar Español|Knowledge
+C|390|Mariavisión|Knowledge
+C|391|Enlace|Knowledge
+C|393|ESNE|Knowledge
+C|395|@prende+|Knowledge
+C|397|TeleSecundaria|Knowledge
+C|400|Mosaico Películas|Movies
+C|401|HBO|Movies
+C|402|HBO 2|Movies
+C|404|HBO Signature|Movies
+C|405|HBO Family|Movies
+C|406|HBO Plus|Movies
+C|407|HBO Mundi|Movies
+C|408|HBO Pop|Movies
+C|410|HBO Xtreme|Movies
+C|411|Totalplay ONDEMAND Preview|Movies
+C|425|Cinema|Movies
+C|430|Cinecanal|Movies
+C|434|Totalplay ONDEMAND|Movies
+C|435|TNT|Movies
+C|442|Claro Cinema|Movies
+C|444|AMC|Movies
+C|445|Space|Movies
+C|447|A3Cine|Movies
+C|448|Cine Latino|Movies
+C|450|Sony Movies|Movies
+C|481|Cinemax|Movies
+C|492|Studio Universal|Movies
+C|493|Europa Europa|Movies
+C|494|Film&Arts|Movies
+C|496|TCM|Movies
+C|497|MX Nuestro Cine|Movies
+C|498|DHE|Movies
+C|500|Mosaico Deportes|Sports
+C|501|Golf Channel Latin America|Sports
+C|502|NFL Network|Sports
+C|505|NBA TV|Sports
+C|513|ESPN|Sports
+C|514|ESPN2|Sports
+C|515|ESPN3|Sports
+C|516|ESPN4|Sports
+C|517|Hi! Sports|Sports
+C|521|Claro Sports|Sports
+C|522|Fox Sports|Sports
+C|524|Fox+|Sports
+C|525|Azteca Deportes Network|Sports
+C|526|Fox|Sports
+C|527|Fox Sports 2|Sports
+C|528|World Fishing Network|Sports
+C|529|Outdoor Channel|Sports
+C|530|PX Sports|Sports
+C|531|Fuel TV|Sports
+C|532|Titan Channel|Sports
+C|535|Fox Sports Premium|Sports
+C|540|Claro Sports 1|Sports
+C|541|Claro Sports 2|Sports
+C|542|Claro Sports 3|Sports
+C|543|Claro Sports 4|Sports
+C|550|VSiN|Sports
+C|569|Fox Sports 3|Sports
+C|575|TVC Deportes|Sports
+C|576|AYM Sports|Sports
+C|577|AYM Sports 2|Sports
+C|578|AYM Sports 4|Sports
+C|579|AYM Sports 5|Sports
+C|580|World Wide Baseball|Sports
+C|581|AYM Sports 3|Sports
+C|582|AYM Sports 6|Sports
+C|600|Mosaico Noticias|News
+C|601|ADN Noticias|News
+C|602|Azteca Noticias|News
+C|603|Milenio Televisión|News
+C|605|CNN|News
+C|608|Fox News|News
+C|610|Rai News 24|News
+C|612|RT|News
+C|613|RT en Español|News
+C|615|Euronews|News
+C|620|Canal 26|News
+C|622|FRANCE24 Français|News
+C|624|FRANCE24 English|News
+C|625|CNBC|News
+C|626|CNN International|News
+C|627|CNN en Español|News
+C|628|FRANCE24 Español|News
+C|629|Meganoticias MX|News
+C|630|Bloomberg|News
+C|631|BBC News|News
+C|632|Al Jazeera English|News
+C|633|NTN24|News
+C|638|Canal del Congreso|News
+C|639|Plural TV|News
+C|640|HLN|News
+C|650|Mosaico Internacional|International
+C|652|Antena 3 Internacional|International
+C|653|TVG América|International
+C|654|DW Español|International
+C|655|Negocios TV|International
+C|656|A3Series|International
+C|657|TV5MONDE Amérique Latine|International
+C|658|UCL|International
+C|659|RAI Italia|International
+C|660|CGTN Español|International
+C|661|CCTV 4|International
+C|662|Arirang Korea|International
+C|665|TV Chile|International
+C|667|Telefe Internacional|International
+C|668|NHK World Premium|International
+C|700|Mosaico Música|Music
+C|702|Stingray iConcerts|Music
+C|705|Music Top|Music
+C|715|Latina TV|Music
+C|716|Tierra Mia|Music
+C|717|Box Playlist|Music
+C|725|Clic|Music
+C|726|MTV|Music
+C|730|Concert Channel|Music
+C|731|Stingray cmusic|Music
+C|733|Stingray Hits!|Music
+C|736|HTV|Music
+C|738|Teleritmo|Music
+C|739|Stingray Now 4K|Music
+C|741|Stingray djazz|Music
+C|742|Stingray Classica|Music
+C|745|Stingray Retro|Music
+C|746|Stingray Loud|Music
+C|747|Stingray Juicebox|Music
+C|748|Stingray Naturescape|Music
+C|749|Stingray Festival 4K|Music
+C|750|Romance Latino|Audio
+C|751|Mariachi|Audio
+C|752|Reggaeton|Audio
+C|753|Viva México|Audio
+C|754|Rock en Español|Audio
+C|755|Latin Pop|Audio
+C|756|Latin Lounge|Audio
+C|757|Latino Tropical|Audio
+C|758|Tango|Audio
+C|759|Salsa & Merengue|Audio
+C|760|Latino Urbana|Audio
+C|761|La Habana|Audio
+C|762|Banda y Grupera|Audio
+C|763|Latino Tejano|Audio
+C|764|Special Stingray|Audio
+C|765|Silk (Love Songs)|Audio
+C|766|Hit List|Audio
+C|767|Just 80's|Audio
+C|768|Just 70's|Audio
+C|769|Viejitas pero Buenísimas|Audio
+C|770|Adult Pop|Audio
+C|771|Just 90's|Audio
+C|772|Just Millenium (2K)|Audio
+C|773|OMG|Audio
+C|774|Total Hits Italy|Audio
+C|775|The Americas|Audio
+C|776|Around The World|Audio
+C|777|Jammin' Reggae|Audio
+C|778|Euro Hits|Audio
+C|779|Dancefloor Fillers|Audio
+C|780|The Chill Lounge|Audio
+C|781|Cocktail Lounge|Audio
+C|782|Dance Clubbin|Audio
+C|783|Dance Classics|Audio
+C|784|Just Kids|Audio
+C|785|New Age|Audio
+C|786|Popcorn|Audio
+C|787|Easy Listening|Audio
+C|788|Clásicos Para Todos|Audio
+C|789|Classic Masters|Audio
+C|790|Opera Plus|Audio
+C|791|Jazz Master|Audio
+C|792|Standards|Audio
+C|793|Latin Jazz|Audio
+C|794|Classic R'n'B & Soul|Audio
+C|795|The Big Bands|Audio
+C|796|Blues|Audio
+C|797|Hard Rock|Audio
+C|798|Rock Alternative|Audio
+C|799|Rock Anthems|Audio
+A|108|Totalplay
+A|125|Netflix (alternative)
+A|333|Netflix
+A|206|Disney+ (alternative)
+A|335|Disney+
+A|210|Prime Video
+A|482|Prime Video (alternative)
+A|216|ViX Premium
+A|225|YouTube
+A|413|Max
+A|473|Paramount+
+A|476|Apple TV+
+A|488|Picardía Nacional
+A|510|NBA League Pass
+A|711|Qello Concerts
+A|712|Stingray Classica
+A|713|Stingray Karaoke
