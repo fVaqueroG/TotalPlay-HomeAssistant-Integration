@@ -27,5 +27,7 @@ jobs:
         run: python -m unittest discover -s tests -v
       - name: Check dashboard card JavaScript syntax
         run: node --check custom_components/totalplay_stb/www/totalplay-stb-card.js
+      - name: Smoke-test IPTV timeline, guide state and remote
+        run: node tests/test_card_guide.js
       - name: Validate with hassfest
         uses: home-assistant/actions/hassfest@master
