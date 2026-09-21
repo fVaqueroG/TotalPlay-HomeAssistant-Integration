@@ -28,6 +28,7 @@ from .http import async_send_key
 # has been physically verified; other app numbers are supplied by the user.
 _NETFLIX_CHANNEL = "333"
 _CHANNEL_DIGIT_DELAY_SECS = 0.10
+_MENU_EXIT_DELAY_SECS = 0.35
 _APP_LAUNCH_WAIT_SECS = 5.0
 _NETFLIX_LAUNCH_WAIT_SECS = _APP_LAUNCH_WAIT_SECS  # Legacy test alias.
 _CHANNEL_PATTERN = re.compile(r"[0-9]{1,4}\Z")
@@ -99,6 +100,17 @@ class TotalplayMediaPlayer(MediaPlayerEntity):
             if index < len(keys) - 1:
                 await asyncio.sleep(delay)
 
+    async def _prepare_for_channel_selection(self) -> None:
+        """Dismiss STB menus before sending a complete channel or app number.
+
+        A single channel_up key returns the owner's decoder to live TV even if
+        the on-screen menu is open. Keep it within the command lock and allow a
+        short pause before the first digit; do not prepend it to remote key taps.
+        """
+        await async_ensure_display_source(self._hass, self._entry)
+        await self._send_keys(["channel_up"])
+        await asyncio.sleep(_MENU_EXIT_DELAY_SECS)
+
     async def async_volume_up(self) -> None:
         async with self._command_lock:
             await self._send_keys(["volume_up"])
@@ -133,7 +145,7 @@ class TotalplayMediaPlayer(MediaPlayerEntity):
             app_id = str(media_id).strip()
             channel = _NETFLIX_CHANNEL if app_id.casefold() == "netflix" else _validated_channel(app_id)
             async with self._command_lock:
-                await async_ensure_display_source(self._hass, self._entry)
+                await self._prepare_for_channel_selection()
                 await self._send_keys(list(channel), delay=_CHANNEL_DIGIT_DELAY_SECS)
                 # Sending OK while the launch screen is loading can be ignored.
                 await asyncio.sleep(_APP_LAUNCH_WAIT_SECS)
@@ -148,7 +160,7 @@ class TotalplayMediaPlayer(MediaPlayerEntity):
             )
         channel = _validated_channel(media_id)
         async with self._command_lock:
-            await async_ensure_display_source(self._hass, self._entry)
+            await self._prepare_for_channel_selection()
             await self._send_keys(list(channel), delay=_CHANNEL_DIGIT_DELAY_SECS)
             self._last_requested_channel = channel
             self.async_write_ha_state()
