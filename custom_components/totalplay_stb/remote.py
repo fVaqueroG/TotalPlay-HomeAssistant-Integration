@@ -17,6 +17,7 @@ from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .const import DOMAIN, normalize_key
+from .display import async_ensure_display_source
 from .http import async_send_key
 
 
@@ -24,7 +25,7 @@ async def async_setup_entry(
     hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback
 ) -> None:
     """Add the command-only remote."""
-    async_add_entities([TotalplayRemote(entry)])
+    async_add_entities([TotalplayRemote(entry, hass)])
 
 
 class TotalplayRemote(RemoteEntity):
@@ -36,7 +37,9 @@ class TotalplayRemote(RemoteEntity):
     _attr_is_on = None
     _attr_should_poll = False
 
-    def __init__(self, entry: ConfigEntry) -> None:
+    def __init__(self, entry: ConfigEntry, hass: HomeAssistant | None = None) -> None:
+        self._entry = entry
+        self._hass = hass
         self._host = entry.data[CONF_HOST]
         self._port = entry.data[CONF_PORT]
         # Preserve entity registry IDs when updating from v0.2.0.
@@ -64,7 +67,7 @@ class TotalplayRemote(RemoteEntity):
     async def async_send_command(
         self, command: Iterable[str], **kwargs: Any
     ) -> None:
-        """Send decoded official-app keys via the tolerant local HTTP transport."""
+        """Check the display once per batch before sending remote keys."""
         commands = [command] if isinstance(command, str) else list(command)
         if not commands:
             return
@@ -84,6 +87,10 @@ class TotalplayRemote(RemoteEntity):
                 "Invalid repeats/delay, or hold_secs is unsupported by this API"
             )
 
+        # The UI can also send remote.send_command directly, not just
+        # media_player.play_media; check the configured input for that path too.
+        if self._hass is not None:
+            await async_ensure_display_source(self._hass, self._entry)
         sequence = keys * repeat
         for index, key in enumerate(sequence):
             await async_send_key(self._host, self._port, key)
