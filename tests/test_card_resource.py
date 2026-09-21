@@ -25,8 +25,9 @@ class FakeResources:
         self.updated = []
 
     async def async_get_info(self):
-        self.items = [dict(item) for item in self.stored]
-        self.loaded = True
+        if not self.loaded:
+            self.items = [dict(item) for item in self.stored]
+            self.loaded = True
         return {"resources": len(self.items)}
 
     def async_items(self):
