@@ -5,7 +5,7 @@ const vm = require('node:vm');
 const path = require('node:path');
 const file = path.join(__dirname, '../custom_components/totalplay_stb/www/totalplay-guide-layout-v036.js');
 const code = fs.readFileSync(file, 'utf8');
-assert.match(code, /import '\.\/totalplay-pages-remote\.js\?v=0\.3\.6'/);
+assert.match(code, /import '\.\/totalplay-pages-remote\.js\?v=0\.3\.7'/);
 assert.match(code, /\.layout,\.layout\.remote-visible \{display:flex!important;flex-direction:column!important;align-items:stretch!important/);
 assert.match(code, /\.main \{[^}]*flex:1 1 auto;[^}]*height:100%;/);
 assert.match(code, /\.guide-scroll \{[^}]*flex:1 1 0!important;height:0!important;/);
@@ -29,7 +29,7 @@ const sandbox={customElements:{get:()=>Card},document:{createElement:()=>new Ele
 vm.createContext(sandbox);
 vm.runInContext(code.replace(/^import .*;\s*/m,''),sandbox);
 const card=new Card();card.setConfig({title:'Totalplay'});
-assert.equal(card._badge.textContent,'Card v0.3.6');
+assert.equal(card._badge.textContent,'Card v0.3.7');
 assert.equal(card._scroll.scrollTop,0,'Fresh page starts at first channel');
 assert.equal(card._scroll.scrollLeft,0);
 assert.equal(card._styles.length,1,'Only one layout override');
