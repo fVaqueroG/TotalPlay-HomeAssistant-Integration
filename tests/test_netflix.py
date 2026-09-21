@@ -1,4 +1,4 @@
-"""Verify Netflix launch and attached-TV input handling without running HA."""
+"""Verify TV source selection, padded channel digits and app launch without HA."""
 
 from enum import Enum
 import importlib.util
@@ -66,7 +66,7 @@ sys.modules[spec.name] = player_module
 spec.loader.exec_module(player_module)
 
 
-class NetflixLaunchTests(unittest.IsolatedAsyncioTestCase):
+class TotalplayPlayerTests(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):
         self.tv_entity = "media_player.living_room_tv"
         self.entry = types.SimpleNamespace(
@@ -82,7 +82,7 @@ class NetflixLaunchTests(unittest.IsolatedAsyncioTestCase):
         )
         self.player = player_module.TotalplayMediaPlayer(self.hass, self.entry)
 
-    async def test_netflix_sends_333_then_waits_then_ok(self):
+    async def _record(self, media_type, media_id):
         events = []
 
         async def send(host, port, key):
@@ -94,53 +94,56 @@ class NetflixLaunchTests(unittest.IsolatedAsyncioTestCase):
         with patch.object(player_module, "async_send_key", side_effect=send), patch.object(
             player_module.asyncio, "sleep", side_effect=sleep
         ):
-            await self.player.async_play_media("app", "Netflix")
+            await self.player.async_play_media(media_type, media_id)
+        return events
 
-        self.assertEqual(
-            events,
-            [
-                ("key", "3"),
-                ("sleep", 0.35),
-                ("key", "3"),
-                ("sleep", 0.35),
-                ("key", "3"),
-                ("sleep", player_module._NETFLIX_LAUNCH_WAIT_SECS),
-                ("key", "ok"),
-            ],
-        )
+    async def test_netflix_sends_333_then_waits_then_ok(self):
+        events = await self._record("app", "Netflix")
+        self.assertEqual(events, [
+            ("key", "3"), ("sleep", 0.1), ("key", "3"),
+            ("sleep", 0.1), ("key", "3"),
+            ("sleep", player_module._APP_LAUNCH_WAIT_SECS), ("key", "ok"),
+        ])
         self.hass.services.async_call.assert_not_awaited()
         self.assertEqual(self.player.extra_state_attributes["last_requested_channel"], "333")
 
+    async def test_short_channel_is_zero_padded_without_ok(self):
+        events = await self._record("channel", "7")
+        self.assertEqual(events, [
+            ("key", "0"), ("sleep", 0.1), ("key", "0"),
+            ("sleep", 0.1), ("key", "7"),
+        ])
+        self.assertEqual(self.player.extra_state_attributes["last_requested_channel"], "007")
+
+    async def test_two_digit_app_channel_padded_before_ok(self):
+        events = await self._record("app", "12")
+        self.assertEqual(events, [
+            ("key", "0"), ("sleep", 0.1), ("key", "1"),
+            ("sleep", 0.1), ("key", "2"),
+            ("sleep", player_module._APP_LAUNCH_WAIT_SECS), ("key", "ok"),
+        ])
+
+    async def test_three_and_four_digit_channels_unchanged(self):
+        self.assertEqual(player_module._validated_channel("101"), "101")
+        self.assertEqual(player_module._validated_channel("1001"), "1001")
+
     async def test_different_source_selected_only_once(self):
         self.tv_state.attributes["source"] = "HDMI 1"
-        with patch.object(player_module, "async_send_key", new_callable=AsyncMock) as sender, patch.object(
-            player_module.asyncio, "sleep", new_callable=AsyncMock
-        ):
-            await self.player.async_play_media("channel", "101")
+        events = await self._record("channel", "101")
         self.hass.services.async_call.assert_awaited_once_with(
             "media_player", "select_source",
             {"entity_id": self.tv_entity, "source": "HDMI 2"}, blocking=True,
         )
-        self.assertEqual([args.args[2] for args in sender.await_args_list], ["1", "0", "1"])
+        self.assertEqual([e[1] for e in events if e[0] == "key"], ["1", "0", "1"])
 
     async def test_unknown_source_never_switches_blindly(self):
         self.tv_state.attributes.pop("source")
-        with patch.object(player_module, "async_send_key", new_callable=AsyncMock):
-            await self.player.async_play_media("channel", "101")
+        await self._record("channel", "101")
         self.hass.services.async_call.assert_not_awaited()
 
-    async def test_regular_channel_still_sends_digits_without_ok(self):
-        sender = AsyncMock()
-        with patch.object(player_module, "async_send_key", sender), patch.object(
-            player_module.asyncio, "sleep", new_callable=AsyncMock
-        ):
-            await self.player.async_play_media("channel", "101")
-        self.assertEqual([args.args[2] for args in sender.await_args_list], ["1", "0", "1"])
-        self.hass.services.async_call.assert_not_awaited()
-
-    async def test_unsupported_app_cannot_trigger_arbitrary_commands(self):
+    async def test_bad_app_channel_is_rejected(self):
         with patch.object(player_module, "async_send_key", new_callable=AsyncMock) as sender:
-            with self.assertRaisesRegex(errors.HomeAssistantError, "Only the Netflix app"):
+            with self.assertRaisesRegex(errors.HomeAssistantError, "Channel must be"):
                 await self.player.async_play_media("app", "other-app")
             sender.assert_not_awaited()
 
