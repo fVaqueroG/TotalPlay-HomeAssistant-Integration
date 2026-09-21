@@ -6,6 +6,7 @@ if (!TP_POWER_CARD) throw new Error('Totalplay card did not load');
 
 const TP_POWER_CSS = `
 .tp-power-helper {display:inline-flex;align-items:center;justify-content:center;flex:none;width:42px;height:42px;padding:6px}
+.tp-power-helper[hidden] {display:none!important}
 .tp-power-helper ha-icon {--mdc-icon-size:23px}
 .tp-power-helper.on {color:var(--success-color,#65d8a3);border-color:var(--success-color,#65d8a3)}
 .tp-input-warning {color:var(--warning-color,#f5bb6d);font-size:11px;line-height:1.3;margin-top:2px}
@@ -107,8 +108,8 @@ TP_POWER_CARD.prototype.setConfig = function (config) {
   this._updatePowerHelper();
 };
 
-// The base card owns the HA state setter; preserve it and update the optional
-// switch button whenever Home Assistant publishes the linked switch's state.
+// Preserve the base card's HA state setter and refresh the optional power
+// button as Home Assistant publishes the linked switch's actual state.
 let tpHassOwner = TP_POWER_CARD.prototype;
 while (tpHassOwner && !Object.getOwnPropertyDescriptor(tpHassOwner, 'hass')) {
   tpHassOwner = Object.getPrototypeOf(tpHassOwner);
