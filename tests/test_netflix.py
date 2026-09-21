@@ -1,4 +1,4 @@
-"""Verify TV source selection, padded channel digits and app launch without HA."""
+"""Verify TV source selection, menu escape, padded channel digits and app launch without HA."""
 
 from enum import Enum
 import importlib.util
@@ -66,6 +66,10 @@ player_module = importlib.util.module_from_spec(spec)
 sys.modules[spec.name] = player_module
 spec.loader.exec_module(player_module)
 
+_MENU_ESCAPE = [
+    ("key", "channel_up"), ("sleep", player_module._MENU_EXIT_DELAY_SECS)
+]
+
 
 class TotalplayPlayerTests(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):
@@ -101,9 +105,9 @@ class TotalplayPlayerTests(unittest.IsolatedAsyncioTestCase):
             await self.player.async_play_media(media_type, media_id)
         return events
 
-    async def test_netflix_sends_333_then_waits_then_ok(self):
+    async def test_netflix_exits_menu_sends_333_then_waits_then_ok(self):
         events = await self._record("app", "Netflix")
-        self.assertEqual(events, [
+        self.assertEqual(events, _MENU_ESCAPE + [
             ("key", "3"), ("sleep", 0.1), ("key", "3"),
             ("sleep", 0.1), ("key", "3"),
             ("sleep", player_module._APP_LAUNCH_WAIT_SECS), ("key", "ok"),
@@ -111,9 +115,9 @@ class TotalplayPlayerTests(unittest.IsolatedAsyncioTestCase):
         self.hass.services.async_call.assert_not_awaited()
         self.assertEqual(self.player.extra_state_attributes["last_requested_channel"], "333")
 
-    async def test_short_channel_is_zero_padded_without_ok(self):
+    async def test_short_channel_exits_menu_and_zero_pads_without_ok(self):
         events = await self._record("channel", "7")
-        self.assertEqual(events, [
+        self.assertEqual(events, _MENU_ESCAPE + [
             ("key", "0"), ("sleep", 0.1), ("key", "0"),
             ("sleep", 0.1), ("key", "7"),
         ])
@@ -121,7 +125,7 @@ class TotalplayPlayerTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_two_digit_app_channel_padded_before_ok(self):
         events = await self._record("app", "12")
-        self.assertEqual(events, [
+        self.assertEqual(events, _MENU_ESCAPE + [
             ("key", "0"), ("sleep", 0.1), ("key", "1"),
             ("sleep", 0.1), ("key", "2"),
             ("sleep", player_module._APP_LAUNCH_WAIT_SECS), ("key", "ok"),
@@ -138,28 +142,39 @@ class TotalplayPlayerTests(unittest.IsolatedAsyncioTestCase):
             "media_player", "select_source",
             {"entity_id": self.tv_entity, "source": "HDMI 2"}, blocking=True,
         )
-        self.assertEqual([e[1] for e in events if e[0] == "key"], ["1", "0", "1"])
+        self.assertEqual([e[1] for e in events if e[0] == "key"], ["channel_up", "1", "0", "1"])
 
     async def test_unsupported_source_selection_does_not_block_channel(self):
         self.tv_state.attributes["source"] = "HDMI 1"
         self.tv_state.attributes["supported_features"] = 0
         events = await self._record("channel", "101")
         self.hass.services.async_call.assert_not_awaited()
-        self.assertEqual([e[1] for e in events if e[0] == "key"], ["1", "0", "1"])
+        self.assertEqual([e[1] for e in events if e[0] == "key"], ["channel_up", "1", "0", "1"])
 
     async def test_source_selection_service_rejection_does_not_block_app(self):
         self.tv_state.attributes["source"] = "HDMI 1"
         self.hass.services.async_call.side_effect = errors.HomeAssistantError("select_source unsupported")
         events = await self._record("app", "netflix")
         self.hass.services.async_call.assert_awaited_once()
-        self.assertEqual([e[1] for e in events if e[0] == "key"], ["3", "3", "3", "ok"])
+        self.assertEqual([e[1] for e in events if e[0] == "key"], ["channel_up", "3", "3", "3", "ok"])
 
     async def test_unknown_source_never_switches_blindly(self):
         self.tv_state.attributes.pop("source")
-        await self._record("channel", "101")
+        events = await self._record("channel", "101")
         self.hass.services.async_call.assert_not_awaited()
+        self.assertEqual(events[:2], _MENU_ESCAPE)
 
-    async def test_bad_app_channel_is_rejected(self):
+    async def test_remote_step_does_not_send_extra_menu_escape(self):
+        with patch.object(player_module, "async_send_key", new_callable=AsyncMock) as sender:
+            await self.player.async_media_next_track()
+            sender.assert_awaited_once_with("127.0.0.1", 80, "channel_up")
+
+    async def test_volume_command_does_not_send_menu_escape(self):
+        with patch.object(player_module, "async_send_key", new_callable=AsyncMock) as sender:
+            await self.player.async_volume_up()
+            sender.assert_awaited_once_with("127.0.0.1", 80, "volume_up")
+
+    async def test_bad_app_channel_is_rejected_without_changing_channels(self):
         with patch.object(player_module, "async_send_key", new_callable=AsyncMock) as sender:
             with self.assertRaisesRegex(errors.HomeAssistantError, "Channel must be"):
                 await self.player.async_play_media("app", "other-app")
