@@ -23,11 +23,22 @@ from .const import DOMAIN
 from .display import async_ensure_display_source, configured_display
 from .http import async_send_key
 
-# Confirmed on the owner's DIW362 UHD: channel 333 shows a Netflix launch
-# screen, then the center D-pad / `ok` key opens Netflix. The wait allows the
-# channel to tune and the app-launch screen to become ready before pressing OK.
+# The owner's DIW362 UHD uses the same app launch procedure for the app
+# channels: tune the numbered launch channel, wait for its screen, press OK.
+# Netflix has been physically verified on channel 333. The numbers of other
+# app channels are provided by the card/user rather than guessed here.
 _NETFLIX_CHANNEL = "333"
-_NETFLIX_LAUNCH_WAIT_SECS = 5.0
+_APP_LAUNCH_WAIT_SECS = 5.0
+_NETFLIX_LAUNCH_WAIT_SECS = _APP_LAUNCH_WAIT_SECS  # Legacy test/automation alias.
+_CHANNEL_PATTERN = re.compile(r"[0-9]{1,4}\Z")
+
+
+def _validated_channel(value: str) -> str:
+    """Accept only a 1-4 digit channel number; never interpolate API keys."""
+    number = str(value).strip()
+    if not _CHANNEL_PATTERN.fullmatch(number) or int(number) == 0:
+        raise HomeAssistantError("Channel must be a number between 1 and 9999")
+    return number
 
 
 async def async_setup_entry(
@@ -38,7 +49,7 @@ async def async_setup_entry(
 
 
 class TotalplayMediaPlayer(MediaPlayerEntity):
-    """Expose channel, volume and confirmed Netflix launch commands."""
+    """Expose channel, volume and numbered app-launch commands."""
 
     _attr_has_entity_name = True
     _attr_name = "Media Player"
@@ -113,30 +124,29 @@ class TotalplayMediaPlayer(MediaPlayerEntity):
     async def async_play_media(
         self, media_type: MediaType | str, media_id: str, **kwargs: Any
     ) -> None:
-        """Select a numbered TV channel, or launch Netflix via channel 333.
+        """Tune a TV channel or open an app via its numbered launch channel.
 
-        The Netflix command launches its app, not an individual movie or show.
+        ``app`` accepts a channel number, or the backwards-compatible Netflix
+        alias. It opens the app only; it does not select or play a title.
         """
         if media_type in ("app", "application"):
-            if str(media_id).strip().casefold() != "netflix":
-                raise HomeAssistantError("Only the Netflix app has a confirmed launch sequence")
+            app_id = str(media_id).strip()
+            channel = _NETFLIX_CHANNEL if app_id.casefold() == "netflix" else _validated_channel(app_id)
             async with self._command_lock:
                 await async_ensure_display_source(self._hass, self._entry)
-                await self._send_keys(list(_NETFLIX_CHANNEL))
-                # An immediate OK can be ignored while the launch channel loads.
-                await asyncio.sleep(_NETFLIX_LAUNCH_WAIT_SECS)
+                await self._send_keys(list(channel))
+                # Sending OK while the launch screen is loading can be ignored.
+                await asyncio.sleep(_APP_LAUNCH_WAIT_SECS)
                 await self._send_keys(["ok"])
-                self._last_requested_channel = _NETFLIX_CHANNEL
+                self._last_requested_channel = channel
                 self.async_write_ha_state()
             return
 
         if media_type != MediaType.CHANNEL:
             raise HomeAssistantError(
-                "Totalplay supports media_content_type: channel, or app with media_content_id: netflix"
+                "Use media_content_type: channel for TV, or app with its numeric launch channel"
             )
-        channel = str(media_id).strip()
-        if re.fullmatch(r"[0-9]{1,4}", channel) is None or int(channel) == 0:
-            raise HomeAssistantError("Channel must be a number between 1 and 9999")
+        channel = _validated_channel(media_id)
         async with self._command_lock:
             await async_ensure_display_source(self._hass, self._entry)
             await self._send_keys(list(channel))
