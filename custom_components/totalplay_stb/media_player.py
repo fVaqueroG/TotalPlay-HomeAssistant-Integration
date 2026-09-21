@@ -23,13 +23,13 @@ from .const import DOMAIN
 from .display import async_ensure_display_source, configured_display
 from .http import async_send_key
 
-# The owner's DIW362 UHD uses the same app launch procedure for the app
-# channels: tune the numbered launch channel, wait for its screen, press OK.
-# Netflix has been physically verified on channel 333. The numbers of other
-# app channels are provided by the card/user rather than guessed here.
+# The owner's DIW362 UHD uses the same app launch procedure for app channels:
+# tune the numbered channel, wait for its screen, press OK. Netflix channel 333
+# has been physically verified; other app numbers are supplied by the user.
 _NETFLIX_CHANNEL = "333"
+_CHANNEL_DIGIT_DELAY_SECS = 0.10
 _APP_LAUNCH_WAIT_SECS = 5.0
-_NETFLIX_LAUNCH_WAIT_SECS = _APP_LAUNCH_WAIT_SECS  # Legacy test/automation alias.
+_NETFLIX_LAUNCH_WAIT_SECS = _APP_LAUNCH_WAIT_SECS  # Legacy test alias.
 _CHANNEL_PATTERN = re.compile(r"[0-9]{1,4}\Z")
 
 
@@ -92,12 +92,12 @@ class TotalplayMediaPlayer(MediaPlayerEntity):
             "connected_tv_source": tv_source or None,
         }
 
-    async def _send_keys(self, keys: list[str]) -> None:
+    async def _send_keys(self, keys: list[str], delay: float = 0.35) -> None:
         """Send keys sequentially, tolerating the STB's invalid HTTP headers."""
         for index, key in enumerate(keys):
             await async_send_key(self._host, self._port, key)
             if index < len(keys) - 1:
-                await asyncio.sleep(0.35)
+                await asyncio.sleep(delay)
 
     async def async_volume_up(self) -> None:
         async with self._command_lock:
@@ -126,15 +126,15 @@ class TotalplayMediaPlayer(MediaPlayerEntity):
     ) -> None:
         """Tune a TV channel or open an app via its numbered launch channel.
 
-        ``app`` accepts a channel number, or the backwards-compatible Netflix
-        alias. It opens the app only; it does not select or play a title.
+        ``app`` accepts a channel number or backwards-compatible Netflix alias.
+        It opens the app only; it does not select or play a title.
         """
         if media_type in ("app", "application"):
             app_id = str(media_id).strip()
             channel = _NETFLIX_CHANNEL if app_id.casefold() == "netflix" else _validated_channel(app_id)
             async with self._command_lock:
                 await async_ensure_display_source(self._hass, self._entry)
-                await self._send_keys(list(channel))
+                await self._send_keys(list(channel), delay=_CHANNEL_DIGIT_DELAY_SECS)
                 # Sending OK while the launch screen is loading can be ignored.
                 await asyncio.sleep(_APP_LAUNCH_WAIT_SECS)
                 await self._send_keys(["ok"])
@@ -149,6 +149,6 @@ class TotalplayMediaPlayer(MediaPlayerEntity):
         channel = _validated_channel(media_id)
         async with self._command_lock:
             await async_ensure_display_source(self._hass, self._entry)
-            await self._send_keys(list(channel))
+            await self._send_keys(list(channel), delay=_CHANNEL_DIGIT_DELAY_SECS)
             self._last_requested_channel = channel
             self.async_write_ha_state()
