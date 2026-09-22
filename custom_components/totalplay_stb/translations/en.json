@@ -2,56 +2,62 @@
   "config": {
     "step": {
       "user": {
-        "title": "Totalplay STB local remote",
-        "description": "Configure your decoder's local connection. The TV/HDMI input is selected in the next step.",
+        "title": "Totalplay STB discovery and connection",
+        "description": "Enter a decoder IP to verify it directly, or leave the IP blank to discover decoders on the local network. If your STB is on another subnet, enter that subnet (for example 192.168.100.0/24). Manual IPs use the same read-only identification as discovery. Only enable the unverified-IP option if your decoder's information endpoint cannot be reached but you already know its control port works.",
         "data": {
-          "host": "Decoder IP address",
-          "port": "HTTP port"
+          "host": "Decoder IP address (blank = discover)",
+          "port": "HTTP control port",
+          "stb_model": "STB model",
+          "discovery_network": "Optional discovery subnet (CIDR)",
+          "allow_unverified": "Allow manual IP if STB identification fails"
         }
+      },
+      "discovered": {
+        "title": "Select your Totalplay decoder",
+        "description": "Select a decoder identified through Totalplay's local STB information endpoints.",
+        "data": {"discovered_host": "Detected decoder"}
       },
       "display": {
         "title": "Connected television",
         "description": "Select the TV or media player that displays this decoder's HDMI output. Leave blank if it is not available in Home Assistant.",
         "data": {
-          "tv_entity": "Connected TV / display media player"
+          "tv_entity": "Connected TV / display media player",
+          "power_switch": "Optional STB power switch"
         }
       },
       "source": {
         "title": "Totalplay input on TV",
         "description": "Select the HDMI/input that the Totalplay decoder is connected to. It will be selected only if the TV reports a different current source.",
-        "data": {
-          "tv_source": "Connected TV input / HDMI source"
-        }
+        "data": {"tv_source": "Connected TV input / HDMI source"}
       }
     },
     "error": {
       "cannot_connect": "Could not reach this IP address and port",
+      "cannot_identify": "No Totalplay STB identity was returned at that IP and port. Check the address/port, or explicitly allow an unverified manual IP.",
+      "no_devices_found": "No Totalplay decoders were identified. If your STB is on another subnet, enter its IP or a custom private discovery subnet.",
       "invalid_host": "Enter a private IPv4 address",
+      "invalid_network": "Enter a private IPv4 CIDR subnet of /24 or smaller",
       "invalid_source": "Select a non-empty TV input"
     },
-    "abort": {
-      "already_configured": "This decoder is already configured"
-    }
+    "abort": {"already_configured": "This decoder is already configured"}
   },
   "options": {
     "step": {
       "init": {
-        "title": "Connected television",
-        "description": "Choose the TV or media player connected to your Totalplay decoder. Leave blank to disable automatic input selection.",
+        "title": "Decoder model and connected television",
+        "description": "Change the STB model and linked hardware without deleting the integration. The existing IP, entity IDs and other options are retained.",
         "data": {
-          "tv_entity": "Connected TV / display media player"
+          "stb_model": "STB model",
+          "tv_entity": "Connected TV / display media player",
+          "power_switch": "Optional STB power switch"
         }
       },
       "source": {
         "title": "Totalplay input on TV",
-        "description": "Select the HDMI/input for the Totalplay decoder. The integration will check the current source before changing it.",
-        "data": {
-          "tv_source": "Connected TV input / HDMI source"
-        }
+        "description": "Select the HDMI/input for the Totalplay decoder. The integration checks the current source before changing it.",
+        "data": {"tv_source": "Connected TV input / HDMI source"}
       }
     },
-    "error": {
-      "invalid_source": "Select a non-empty TV input"
-    }
+    "error": {"invalid_source": "Select a non-empty TV input"}
   }
 }

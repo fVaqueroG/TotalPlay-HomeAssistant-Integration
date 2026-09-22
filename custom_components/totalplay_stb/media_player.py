@@ -22,10 +22,10 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from .const import DOMAIN
 from .display import async_ensure_display_source, configured_display, configured_power_switch
 from .http import async_send_key
+from .stb import device_details
 
-# The owner's DIW362 UHD uses the same app launch procedure for app channels:
-# tune the numbered channel, wait for its screen, press OK. Netflix channel 333
-# has been physically verified; other app numbers are supplied by the user.
+# Channel 333 (Netflix) was verified on the owner's decoder. Other app channels
+# must be present in the current Totalplay channel guide for the account.
 _NETFLIX_CHANNEL = "333"
 _CHANNEL_DIGIT_DELAY_SECS = 0.05
 _MENU_EXIT_DELAY_SECS = 0.10
@@ -74,15 +74,9 @@ class TotalplayMediaPlayer(MediaPlayerEntity):
         self._last_requested_channel: str | None = None
         self._last_tv_input_check = "not_checked"
         self._command_lock = asyncio.Lock()
-        # Preserve entity registry IDs when updating from v0.2.0.
+        # Preserve entity registry IDs when updating or changing the model.
         self._attr_unique_id = f"{DOMAIN}_{self._host}_{self._port}_media_player"
-        self._attr_device_info = {
-            "identifiers": {(DOMAIN, f"{self._host}:{self._port}")},
-            "name": "Totalplay DIW362 UHD",
-            "manufacturer": "Sagemcom / Totalplay",
-            "model": "DIW362 UHD",
-            "configuration_url": f"http://{self._host}:{self._port}",
-        }
+        self._attr_device_info = device_details(entry)
 
     @property
     def extra_state_attributes(self) -> dict[str, str | None]:

@@ -1,6 +1,5 @@
 """Configure a Totalplay decoder, optional power helper, TV and HDMI input."""
 
-import asyncio
 import ipaddress
 
 import voluptuous as vol
@@ -11,7 +10,13 @@ from homeassistant.core import callback
 from homeassistant.helpers import selector
 
 from .const import DEFAULT_HOST, DEFAULT_PORT, DOMAIN
+from .discovery import async_discover_stbs, async_probe_stb
 from .display import CONF_POWER_SWITCH, CONF_TV_ENTITY, CONF_TV_SOURCE
+from .stb import CONF_STB_MODEL, DEFAULT_NEW_MODEL, STB_MODELS, configured_model
+
+_DISCOVERY_NETWORK = "discovery_network"
+_DISCOVERED_HOST = "discovered_host"
+_ALLOW_UNVERIFIED = "allow_unverified"
 
 
 def _tv_selector():
@@ -31,8 +36,6 @@ def _source_schema(hass, tv_entity: str, selected: str = "") -> vol.Schema:
     sources = list(dict.fromkeys(source.strip() for source in source_list
                                  if isinstance(source, str) and source.strip())) if isinstance(source_list, (list, tuple)) else []
     if sources:
-        # Keep the selected source when the TV is temporarily unavailable or
-        # reports a changed source list, so reconfiguration never erases it.
         if selected and selected not in sources:
             sources.append(selected)
         return vol.Schema({vol.Required(CONF_TV_SOURCE, default=selected if selected in sources else sources[0]): vol.In(sources)})
@@ -40,7 +43,7 @@ def _source_schema(hass, tv_entity: str, selected: str = "") -> vol.Schema:
 
 
 class TotalplaySTBConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
-    """Set up decoder networking and optional connected hardware."""
+    """Locate/verify a decoder, then set up its optional connected hardware."""
 
     VERSION = 1
 
@@ -48,42 +51,78 @@ class TotalplaySTBConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         self._decoder_data: dict = {}
         self._tv_entity = ""
         self._power_switch = ""
+        self._discovered: dict[str, str] = {}
+
+    async def _verified_host(self, host: str, allow_unverified: bool = False):
+        """Use the exact same read-only identification for auto and manual IPs."""
+        port = self._decoder_data[CONF_PORT]
+        identity = await async_probe_stb(host, port)
+        if identity is None and not allow_unverified:
+            return False
+        await self.async_set_unique_id(f"{host}:{port}")
+        self._abort_if_unique_id_configured()
+        self._decoder_data[CONF_HOST] = host
+        return True
 
     async def async_step_user(self, user_input=None):
-        """Validate the host and check TCP reachability before saving."""
+        """Enter one decoder IP or leave it blank to scan the selected subnet."""
         errors = {}
         if user_input is not None:
-            host = user_input[CONF_HOST].strip()
+            host = user_input.get(CONF_HOST, "").strip()
             port = user_input[CONF_PORT]
-            try:
-                ip = ipaddress.ip_address(host)
-                if ip.version != 4 or not ip.is_private or ip.is_loopback:
-                    raise ValueError("Host must be a private IPv4 address")
-            except ValueError:
-                errors[CONF_HOST] = "invalid_host"
-            else:
-                await self.async_set_unique_id(f"{host}:{port}")
-                self._abort_if_unique_id_configured()
-                writer = None
+            network = user_input.get(_DISCOVERY_NETWORK, "").strip()
+            self._decoder_data = {
+                CONF_PORT: port,
+                CONF_STB_MODEL: user_input[CONF_STB_MODEL],
+            }
+            if host:
                 try:
-                    _, writer = await asyncio.wait_for(asyncio.open_connection(host, port), timeout=3)
-                except (OSError, asyncio.TimeoutError):
-                    errors["base"] = "cannot_connect"
+                    ip = ipaddress.ip_address(host)
+                    if ip.version != 4 or not ip.is_private or ip.is_loopback:
+                        raise ValueError("Host must be a private IPv4 address")
+                except ValueError:
+                    errors[CONF_HOST] = "invalid_host"
                 else:
-                    self._decoder_data = {CONF_HOST: host, CONF_PORT: port}
-                    return await self.async_step_display()
-                finally:
-                    if writer is not None:
-                        writer.close()
-                        try:
-                            await writer.wait_closed()
-                        except OSError:
-                            pass
+                    if await self._verified_host(host, user_input.get(_ALLOW_UNVERIFIED, False)):
+                        return await self.async_step_display()
+                    errors["base"] = "cannot_identify"
+            else:
+                try:
+                    discovered = await async_discover_stbs(self.hass, port, network)
+                except ValueError:
+                    errors[_DISCOVERY_NETWORK] = "invalid_network"
+                else:
+                    if discovered:
+                        self._discovered = {
+                            device.host: f"{device.name} ({device.host})"
+                            for device in discovered
+                        }
+                        return await self.async_step_discovered()
+                    errors["base"] = "no_devices_found"
         return self.async_show_form(
             step_id="user",
             data_schema=vol.Schema({
-                vol.Required(CONF_HOST, default=DEFAULT_HOST): str,
+                vol.Optional(CONF_HOST, default=DEFAULT_HOST): str,
                 vol.Required(CONF_PORT, default=DEFAULT_PORT): vol.All(vol.Coerce(int), vol.Range(min=1, max=65535)),
+                vol.Required(CONF_STB_MODEL, default=DEFAULT_NEW_MODEL): vol.In(STB_MODELS),
+                vol.Optional(_DISCOVERY_NETWORK): str,
+                vol.Optional(_ALLOW_UNVERIFIED, default=False): bool,
+            }),
+            errors=errors,
+        )
+
+    async def async_step_discovered(self, user_input=None):
+        """Let the user choose when multiple decoders answer the scan."""
+        errors = {}
+        if user_input is not None:
+            host = user_input[_DISCOVERED_HOST]
+            if host in self._discovered and await self._verified_host(host):
+                return await self.async_step_display()
+            errors["base"] = "cannot_identify"
+        return self.async_show_form(
+            step_id="discovered",
+            data_schema=vol.Schema({
+                vol.Required(_DISCOVERED_HOST): vol.In(self._discovered)
             }),
             errors=errors,
         )
@@ -119,8 +158,9 @@ class TotalplaySTBConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         )
 
     def _finish(self, source: str):
+        model = self._decoder_data[CONF_STB_MODEL]
         return self.async_create_entry(
-            title=f"Totalplay STB {self._decoder_data[CONF_HOST]}",
+            title=f"Totalplay {model} ({self._decoder_data[CONF_HOST]})",
             data=self._decoder_data,
             options={CONF_TV_ENTITY: self._tv_entity, CONF_TV_SOURCE: source,
                      CONF_POWER_SWITCH: self._power_switch},
@@ -129,29 +169,37 @@ class TotalplaySTBConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     @staticmethod
     @callback
     def async_get_options_flow(config_entry):
-        """Edit the connected hardware without deleting/re-pairing the STB."""
+        """Edit the STB model and connected hardware without deleting the entry."""
         return TotalplayOptionsFlow()
 
 
 class TotalplayOptionsFlow(config_entries.OptionsFlowWithReload):
-    """Preserve existing TV/source/power selections when changing one option."""
+    """Keep existing TV/source/power selections when changing the STB model."""
 
     def __init__(self) -> None:
         self._tv_entity = ""
         self._power_switch = ""
+        self._model = ""
+
+    def _options(self, source: str) -> dict:
+        return {CONF_TV_ENTITY: self._tv_entity, CONF_TV_SOURCE: source,
+                CONF_POWER_SWITCH: self._power_switch, CONF_STB_MODEL: self._model}
 
     async def async_step_init(self, user_input=None):
         if user_input is not None:
+            self._model = user_input[CONF_STB_MODEL]
             self._tv_entity = user_input.get(CONF_TV_ENTITY, "") or ""
             self._power_switch = user_input.get(CONF_POWER_SWITCH, "") or ""
             if not self._tv_entity:
-                return self.async_create_entry(data={CONF_TV_ENTITY: "", CONF_TV_SOURCE: "",
-                                                     CONF_POWER_SWITCH: self._power_switch})
+                return self.async_create_entry(data=self._options(""))
             return await self.async_step_source()
         existing = self.config_entry.options.get(CONF_TV_ENTITY, "")
         power = self.config_entry.options.get(CONF_POWER_SWITCH, "")
-        schema = vol.Schema({vol.Optional(CONF_TV_ENTITY): _tv_selector(),
-                             vol.Optional(CONF_POWER_SWITCH): _power_selector()})
+        schema = vol.Schema({
+            vol.Required(CONF_STB_MODEL, default=configured_model(self.config_entry)): vol.In(STB_MODELS),
+            vol.Optional(CONF_TV_ENTITY): _tv_selector(),
+            vol.Optional(CONF_POWER_SWITCH): _power_selector(),
+        })
         if existing or power:
             schema = self.add_suggested_values_to_schema(schema, {
                 CONF_TV_ENTITY: existing, CONF_POWER_SWITCH: power,
@@ -162,9 +210,7 @@ class TotalplayOptionsFlow(config_entries.OptionsFlowWithReload):
         if user_input is not None:
             source = user_input[CONF_TV_SOURCE].strip()
             if source:
-                return self.async_create_entry(data={CONF_TV_ENTITY: self._tv_entity,
-                                                     CONF_TV_SOURCE: source,
-                                                     CONF_POWER_SWITCH: self._power_switch})
+                return self.async_create_entry(data=self._options(source))
             return self.async_show_form(
                 step_id="source", data_schema=_source_schema(self.hass, self._tv_entity),
                 errors={CONF_TV_SOURCE: "invalid_source"},

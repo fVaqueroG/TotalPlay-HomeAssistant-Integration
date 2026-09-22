@@ -7,7 +7,7 @@ const root = path.join(__dirname, '../custom_components/totalplay_stb/www');
 const entry = fs.readFileSync(path.join(root, 'totalplay-stb-v0311.js'), 'utf8');
 const init = fs.readFileSync(path.join(root, '../__init__.py'), 'utf8');
 assert.match(entry, /totalplay-stb-v0310\.js\?v=0\.3\.11/);
-assert.match(init, /_CARD_URL, str\(www \/ "totalplay-stb-v0320\.js"\)/);
+assert.match(init, /_CARD_URL, str\(www \/ "totalplay-stb-v0324-responsive\.js"\)/);
 assert.match(init, /"\/totalplay_stb\/totalplay-stb-v0319\.js"/);
 assert.match(init, /"\/totalplay_stb\/totalplay-stb-v0318\.js"/);
 assert.match(init, /"\/totalplay_stb\/totalplay-stb-v0317\.js"/);
