@@ -43,6 +43,9 @@ jobs:
           node --input-type=module --check < custom_components/totalplay_stb/www/totalplay-stb-v0318.js
           node --input-type=module --check < custom_components/totalplay_stb/www/totalplay-stb-v0319.js
           node --input-type=module --check < custom_components/totalplay_stb/www/totalplay-stb-v0320.js
+          node --input-type=module --check < custom_components/totalplay_stb/www/totalplay-stb-v0328.js
+          node --input-type=module --check < custom_components/totalplay_stb/www/totalplay-epg-mapping.js
+          node --input-type=module --check < custom_components/totalplay_stb/www/totalplay-stb-v0329.js
       - name: Test IPTV guide, EPG mapping, scrolling, pages, layout, logos and optional power switch
         run: |
           node tests/test_card_guide.js
@@ -60,5 +63,6 @@ jobs:
           node tests/test_brand_channel_logos.cjs
           node tests/test_black_header.cjs
           node tests/test_power_helper.cjs
+          node tests/test_repo_epg_mapping.cjs
       - name: Validate with hassfest
         uses: home-assistant/actions/hassfest@master
