@@ -40,6 +40,7 @@ jobs:
           node --input-type=module --check < custom_components/totalplay_stb/www/totalplay-stb-v0315.js
           node --input-type=module --check < custom_components/totalplay_stb/www/totalplay-stb-v0316.js
           node --input-type=module --check < custom_components/totalplay_stb/www/totalplay-stb-v0317.js
+          node --input-type=module --check < custom_components/totalplay_stb/www/totalplay-stb-v0318.js
       - name: Test IPTV guide, EPG mapping, scrolling, pages, layout, logos and optional power switch
         run: |
           node tests/test_card_guide.js
