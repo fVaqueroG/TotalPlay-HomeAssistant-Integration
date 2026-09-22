@@ -7,6 +7,7 @@ from homeassistant.components.http import StaticPathConfig
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 
+from .artwork import TotalplayArtworkView
 from .card_resource import async_register_card_resource
 from .const import DOMAIN
 from .epg_manager import TotalplayCachedGuideView
@@ -17,7 +18,7 @@ _CARD_URL = "/totalplay_stb/totalplay-stb-card.js"
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
-    """Set up decoder entities and pre-warm a single authenticated EPG cache."""
+    """Set up decoder entities, shared EPG and persistent artwork cache."""
     domain_data = hass.data.setdefault(DOMAIN, {})
     if not domain_data.get("card_registered"):
         # Keep the public URL and card type stable for existing dashboards.
@@ -26,7 +27,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         await hass.http.async_register_static_paths(
             [
                 StaticPathConfig(
-                    _CARD_URL, str(www / "totalplay-stb-v0342.js"), False
+                    _CARD_URL, str(www / "totalplay-stb-v0343.js"), False
                 ),
                 *(
                     StaticPathConfig(
@@ -44,9 +45,12 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                 ),
             ]
         )
-        view = TotalplayCachedGuideView(hass)
-        hass.http.register_view(view)
-        domain_data["guide_view"] = view
+        guide = TotalplayCachedGuideView(hass)
+        artwork = TotalplayArtworkView(hass)
+        hass.http.register_view(guide)
+        hass.http.register_view(artwork)
+        domain_data["guide_view"] = guide
+        domain_data["artwork_view"] = artwork
         domain_data["card_registered"] = True
 
     if not domain_data.get("resource_registered"):
@@ -58,16 +62,20 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     domain_data.setdefault("active_entries", set()).add(entry.entry_id)
     domain_data["guide_view"].async_start()
+    domain_data["artwork_view"].async_start()
     return True
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
-    """Unload decoder entities and stop EPG updates when none remain."""
+    """Stop EPG and artwork preloading when no decoder entries remain."""
     unloaded = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
     if unloaded:
         domain_data = hass.data.get(DOMAIN, {})
         entries = domain_data.get("active_entries", set())
         entries.discard(entry.entry_id)
-        if not entries and domain_data.get("guide_view"):
-            domain_data["guide_view"].async_stop()
+        if not entries:
+            if domain_data.get("guide_view"):
+                domain_data["guide_view"].async_stop()
+            if domain_data.get("artwork_view"):
+                domain_data["artwork_view"].async_stop()
     return unloaded
