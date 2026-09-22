@@ -21,13 +21,12 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     domain_data = hass.data.setdefault(DOMAIN, {})
     if not domain_data.get("card_registered"):
         # Keep the public URL and card type stable for existing dashboards.
-        # Register EVERY bundled JS module, not a hand-maintained subset: an
-        # omitted import prevents the browser from registering the custom card.
+        # Register EVERY bundled JS module so a new version cannot omit imports.
         www = Path(__file__).parent / "www"
         await hass.http.async_register_static_paths(
             [
                 StaticPathConfig(
-                    _CARD_URL, str(www / "totalplay-stb-v0333.js"), False
+                    _CARD_URL, str(www / "totalplay-stb-v0334.js"), False
                 ),
                 *(
                     StaticPathConfig(
