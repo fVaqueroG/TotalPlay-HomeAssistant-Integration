@@ -6,9 +6,9 @@ const TP_POPUP_FULL = customElements.get('totalplay-stb-card');
 if (!TP_POPUP_FULL) throw new Error('The full Totalplay card must load before the popup card');
 
 const TP_POPUP_CSS = `
-:host{display:block}
-ha-card{background:var(--ha-card-background,var(--card-background-color,#1b1b1b));overflow:hidden;border-radius:14px}
-button{display:flex;align-items:center;gap:11px;width:100%;min-height:58px;padding:10px 14px;
+:host{display:block;--popup-button-height:120px}
+ha-card{height:var(--popup-button-height);min-height:var(--popup-button-height);box-sizing:border-box;background:var(--ha-card-background,var(--card-background-color,#1b1b1b));overflow:hidden;border-radius:var(--ha-card-border-radius,14px)}
+button{display:flex;align-items:center;justify-content:center;gap:10px;width:100%;height:100%;min-height:var(--popup-button-height);box-sizing:border-box;padding:8px;
   border:0;background:transparent;color:var(--primary-text-color,#fff);cursor:pointer;text-align:left;font:inherit}
 button:hover{background:color-mix(in srgb,var(--primary-color,#bc77d6) 12%,transparent)}
 button:focus-visible{outline:2px solid var(--primary-color,#bc77d6);outline-offset:-3px}
@@ -16,6 +16,8 @@ button:focus-visible{outline:2px solid var(--primary-color,#bc77d6);outline-offs
 .tp-p-mark i{font-style:normal;color:#f3c853}
 .tp-p-title{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:16px;font-weight:740}
 .tp-p-expand{width:20px;height:20px;flex:none;opacity:.7}
+.tp-p-vertical{justify-content:center;padding:8px}
+.tp-p-logo{display:block;width:auto;max-width:100%;height:104px;max-height:104px;object-fit:contain}
 `;
 const TP_POPUP_DIALOG_CSS = `
 dialog.tp-stb-popup-dialog{position:fixed;inset:0;box-sizing:border-box;border:1px solid var(--divider-color,#555);
@@ -52,7 +54,7 @@ class TotalplayStbPopupCard extends HTMLElement {
   static getStubConfig(hass) {
     return {...(TP_POPUP_FULL.getStubConfig?.(hass) || {}), title:'Totalplay'};
   }
-  getCardSize() {return 1;}
+  getCardSize() {return this._config?.popup_button_style === 'vertical_logo' ? 2 : 1;}
   setConfig(config) {
     if (!config || typeof config !== 'object') throw new Error('Configure a Totalplay decoder');
     this._config = {...config};
@@ -70,6 +72,15 @@ class TotalplayStbPopupCard extends HTMLElement {
     const expand=document.createElement('ha-icon');expand.className='tp-p-expand';expand.setAttribute('icon','mdi:arrow-expand');
     expand.setAttribute('aria-hidden','true');
     button.append(mark,name,expand);
+    if (this._config.popup_button_style === 'vertical_logo') {
+      button.classList.add('tp-p-vertical');
+      const logo=document.createElement('img');
+      logo.className='tp-p-logo';logo.alt='';
+      logo.addEventListener('load',()=>{mark.hidden=true;name.hidden=true;expand.hidden=true;});
+      logo.addEventListener('error',()=>{logo.remove();mark.hidden=false;name.hidden=false;expand.hidden=false;});
+      button.appendChild(logo);
+      logo.src='/totalplay_stb/brand/totalplay-vertical-approved.png?v=0.3.57';
+    }
     button.addEventListener('click',()=>this._openPopup());
     card.append(button);root.append(css,card);
     this._button=button;
