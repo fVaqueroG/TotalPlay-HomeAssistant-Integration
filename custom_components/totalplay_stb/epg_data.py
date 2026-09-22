@@ -7,15 +7,16 @@ from datetime import datetime, timezone, timedelta
 import io
 import re
 import xml.etree.ElementTree as ET
+from urllib.parse import urlsplit
 
 MAX_GUIDE_BYTES = 25_000_000
 MAX_STREAMED_XMLTV_BYTES = 160_000_000
 MAX_CHANNELS = 1000
 MAX_PROGRAMMES = 150_000
+# The backend refreshes on :00/:30. Keep an extra half hour so the timeline
+# still contains eight hours of data at the next scheduled refresh boundary.
+GUIDE_WINDOW = timedelta(hours=8, minutes=30)
 
-# EPGTalk's Latino guide starts with <!DOCTYPE tv SYSTEM "xmltv.dtd">.
-# Remove only this exact, inert XMLTV declaration before the XML parser sees
-# it. We never resolve the referenced DTD, nor accept internal entity subsets.
 _SAFE_XMLTV_DOCTYPE = re.compile(
     rb'<!DOCTYPE\s+tv\s+SYSTEM\s+(["\'])xmltv\.dtd\1\s*>', re.IGNORECASE
 )
@@ -34,6 +35,19 @@ def _when(value: str) -> datetime | None:
             return datetime.strptime(value, fmt).astimezone(timezone.utc)
         except ValueError:
             continue
+    return None
+
+
+def _logo_url(value: str | None) -> str | None:
+    """Only expose HTTPS image URLs, never an XMLTV-supplied active URI."""
+    if not value or len(value) > 512 or any(ord(c) < 32 for c in value):
+        return None
+    try:
+        address = urlsplit(value)
+        if address.scheme.lower() == "https" and address.hostname and not address.username and not address.password:
+            return value
+    except ValueError:
+        pass
     return None
 
 
@@ -95,7 +109,6 @@ class _LimitedXmlReader:
                 if (match is None or match.start() >= (_ROOT_OPEN.search(data) or match).start()
                         or b"<!doctype" in (data[:match.start()] + data[match.end():]).lower()):
                     raise ValueError("XMLTV document contains a forbidden DTD")
-                # Strip the external DTD *reference*, without fetching or parsing it.
                 data = data[:match.start()] + data[match.end():]
             self._ready = True
             self._tail = data[-16:].lower()
@@ -115,10 +128,11 @@ def parse_xmltv_stream(source, now: datetime | None = None,
     """Stream XMLTV and clear processed nodes to bound memory usage.
 
     Multi-day XMLTV files can exceed the original 25 MB limit after gzip
-    decompression; retain only programmes overlapping the next eight hours.
+    decompression; retain only programmes overlapping the next eight and a
+    half hours, so a timed refresh does not truncate guide navigation.
     """
     now = (now or datetime.now(timezone.utc)).astimezone(timezone.utc)
-    end = now + timedelta(hours=8)
+    end = now + GUIDE_WINDOW
     channels: dict[str, dict] = {}
     count = timestamped = retained = 0
     root = None
@@ -136,8 +150,11 @@ def parse_xmltv_stream(source, now: datetime | None = None,
                 if name.text and name.text.strip()
             ))
             if channel_id and names and channel_id not in channels:
+                icon = node.find("icon")
+                logo = _logo_url(icon.get("src")) if icon is not None else None
                 channels[channel_id] = {
-                    "id": channel_id, "name": names[0], "names": names[:10], "schedule": []
+                    "id": channel_id, "name": names[0], "names": names[:10],
+                    "logo": logo, "schedule": []
                 }
                 if len(channels) > MAX_CHANNELS:
                     raise ValueError("XMLTV channel count exceeds limit")
