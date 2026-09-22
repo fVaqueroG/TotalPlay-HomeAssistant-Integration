@@ -1,7 +1,7 @@
 """Regression checks for read-only external EPG decoding."""
 
 import importlib.util
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 import unittest
 
@@ -26,6 +26,31 @@ class XmltvTests(unittest.TestCase):
         self.assertEqual(result['channels'][0]['id'], 'A&E.mx')
         self.assertEqual([p['title'] for p in result['channels'][0]['schedule']], ['Now & Then', 'Next'])
         self.assertEqual(result['channels'][0]['schedule'][0]['start'], '2026-09-21T14:00:00+00:00')
+
+    def test_eight_and_a_half_hour_window_retains_boundary_buffer(self):
+        now = datetime(2026, 9, 21, 14, 0, tzinfo=timezone.utc)
+        def stamp(dt):
+            return dt.strftime('%Y%m%d%H%M%S +0000')
+        parts = ['<tv><channel id="mx"><display-name>MX</display-name></channel>']
+        for minutes, title in ((8*60+20, 'In buffer'), (8*60+40, 'Beyond buffer')):
+            start = now + timedelta(minutes=minutes)
+            stop = start + timedelta(minutes=10)
+            parts.append(f'<programme channel="mx" start="{stamp(start)}" stop="{stamp(stop)}"><title>{title}</title></programme>')
+        parts.append('</tv>')
+        result = module.parse_xmltv(''.join(parts).encode(), now)
+        self.assertEqual(module.GUIDE_WINDOW, timedelta(hours=8,minutes=30))
+        self.assertEqual([p['title'] for p in result['channels'][0]['schedule']], ['In buffer'])
+
+    def test_station_logos_only_allow_https_image_urls(self):
+        xml = b'''<tv>
+        <channel id="a"><display-name>A</display-name><icon src="https://example.com/a.png"/></channel>
+        <channel id="b"><display-name>B</display-name><icon src="javascript:alert(1)"/></channel>
+        <channel id="c"><display-name>C</display-name><icon src="http://example.com/c.png"/></channel>
+        </tv>'''
+        stations = module.parse_xmltv(xml)['channels']
+        self.assertEqual(stations[0]['logo'], 'https://example.com/a.png')
+        self.assertIsNone(stations[1]['logo'])
+        self.assertIsNone(stations[2]['logo'])
 
     def test_explicit_timezone_without_seconds_is_supported(self):
         xml = b'''<tv><channel id="id"><display-name>Channel</display-name></channel>
