@@ -73,12 +73,18 @@ class TotalplayGuideView(HomeAssistantView):
         self._next_refresh = 0.0
 
     async def get(self, request: web.Request) -> web.Response:
-        """Share the same cached result between all dashboard viewers."""
+        """Share the cached guide and compress the large schedule response."""
         if time.monotonic() >= self._next_refresh:
             async with self._lock:
                 if time.monotonic() >= self._next_refresh:
                     await self._refresh()
-        return self.json(self._guide)
+        response = self.json(self._guide)
+        # aiohttp negotiates gzip/deflate with the browser. Compress the JSON
+        # response, not the downloaded XMLTV, so no schedule fields are lost.
+        enable_compression = getattr(response, "enable_compression", None)
+        if callable(enable_compression):
+            enable_compression()
+        return response
 
     async def _download(self, url: str) -> dict:
         """Read until EOF with a hard transfer cap, then parse off the event loop.
