@@ -1,12 +1,10 @@
 """Serve the bundled user-supplied Totalplay icon without an external request.
 
-The previous icon may already exist in the persistent artwork cache. Serving the
-packaged icon before consulting that cache prevents the old image resurfacing.
+The icon is packaged directly in the integration and served before consulting
+the persistent artwork cache, so the exact user-provided image is always used.
 """
 
 import asyncio
-import base64
-import binascii
 import hashlib
 import logging
 from pathlib import Path
@@ -14,17 +12,19 @@ from pathlib import Path
 from .artwork import TotalplayArtworkView
 
 _LOGGER = logging.getLogger(__name__)
-_ICON_ASSET = Path(__file__).parent / "www" / "brand" / "totalplay-icon.png.b64"
-_ICON_SHA256 = "9d02cc2363a9f4b8a2a0c04733604fef379aa6bc0d678e7cdb688c36f8f3f149"
+_ICON_ASSET = Path(__file__).parent / "www" / "brand" / "totalplay-icon.png"
+_ICON_SHA256 = "fdef2be7c3db99b499bddd428dbebd6b8e39c0cfbd5288fd0ce9b8c5bd287f3c"
 _PNG_SIGNATURE = b"\x89PNG\r\n\x1a\n"
 
 
 def read_packaged_icon() -> bytes:
-    """Decode the bundled transparent PNG and validate the image and checksum."""
-    encoded = _ICON_ASSET.read_text(encoding="ascii")
-    raw = base64.b64decode("".join(encoded.split()), validate=True)
-    if not (0 < len(raw) <= 1_000_000 and raw.startswith(_PNG_SIGNATURE)
-            and raw[12:16] == b"IHDR"):
+    """Read the bundled transparent PNG and validate the image and checksum."""
+    raw = _ICON_ASSET.read_bytes()
+    if not (
+        0 < len(raw) <= 1_000_000
+        and raw.startswith(_PNG_SIGNATURE)
+        and raw[12:16] == b"IHDR"
+    ):
         raise ValueError("Invalid packaged Totalplay icon PNG")
     if hashlib.sha256(raw).hexdigest() != _ICON_SHA256:
         raise ValueError("Packaged Totalplay icon checksum mismatch")
@@ -49,7 +49,7 @@ class TotalplayPackagedArtworkView(TotalplayArtworkView):
                         self._bundled_icon = await self._hass.async_add_executor_job(
                             read_packaged_icon
                         )
-                    except (OSError, ValueError, binascii.Error):
+                    except (OSError, ValueError):
                         _LOGGER.exception("Could not read the packaged Totalplay icon")
                         return None
         return self._bundled_icon
