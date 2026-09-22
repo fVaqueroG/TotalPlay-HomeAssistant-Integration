@@ -1,0 +1,50 @@
+name: EPG live diagnostic
+on:
+  push:
+    paths:
+      - .github/workflows/epg-live-diagnostic.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Read and parse public Mexican XMLTV providers (metadata only)
+        run: |
+          python - <<'PY'
+          import sys, gzip, urllib.request, importlib.util
+          from pathlib import Path
+          f=Path('custom_components/totalplay_stb/epg.py')
+          module=Path('custom_components/totalplay_stb/epg_data.py')
+          s=importlib.util.spec_from_file_location('epg_data',module)
+          epg_data=importlib.util.module_from_spec(s)
+          s.loader.exec_module(epg_data)
+          sources=(
+             'https://raw.githubusercontent.com/acidjesuz/EPGTalk/master/Latino_guide.xml.gz',
+             'https://epgshare01.online/epgshare01/epg_ripper_MX1.xml.gz',
+             'https://iptv-epg.org/files/epg-mx.xml',
+          )
+          for i,url in enumerate(sources,1):
+            try:
+              request=urllib.request.Request(url,headers={'Accept-Encoding':'identity','User-Agent':'Totalplay-EPG-diagnostic/1'})
+              with urllib.request.urlopen(request,timeout=25) as response:
+                content_type=response.headers.get('Content-Type')
+                encoding=response.headers.get('Content-Encoding')
+                data=response.read(epg_data.MAX_GUIDE_BYTES+1)
+              print(f'PROVIDER {i}: bytes={len(data)} magic={data[:4].hex()} type={content_type} encoding={encoding}',flush=True)
+              if len(data)>epg_data.MAX_GUIDE_BYTES: print('PROVIDER size limit exceeded',flush=True);continue
+              if data.startswith(b'\x1f\x8b'):
+                try:
+                  with gzip.GzipFile(fileobj=__import__('io').BytesIO(data)) as zipped:
+                    parsed=epg_data.parse_xmltv_stream(zipped,max_bytes=epg_data.MAX_STREAMED_XMLTV_BYTES)
+                except Exception as exc:
+                  print(f'PROVIDER {i}: gzip/parser {type(exc).__name__}: {str(exc)[:250]}',flush=True)
+                  continue
+              else:
+                parsed=epg_data.parse_xmltv(data)
+              print(f'PROVIDER {i}: stations={len(parsed["channels"])} total={parsed["programme_count"]} window={parsed["window_programme_count"]}',flush=True)
+            except Exception as exc:
+              print(f'PROVIDER {i}: fetch/parser {type(exc).__name__}: {str(exc)[:250]}',flush=True)
+          PY
