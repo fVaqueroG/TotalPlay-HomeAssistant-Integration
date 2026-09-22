@@ -10,18 +10,17 @@ class Card {
   _channels(){this.matches=(this.matches||0)+1;return [{number:'1',name:'Azteca Uno'}];}
   _renderGuide(){this.renders=(this.renders||0)+1;}
 }
-const sandbox={
-  customElements:{get:name=>name==='totalplay-stb-card'?Card:null},
-  console,
-};
+const sandbox={customElements:{get:name=>name==='totalplay-stb-card'?Card:null},console};
 vm.createContext(sandbox);
 vm.runInContext(code.replace(/^import .*;\s*/m,''),sandbox);
 (async()=>{
   let fetchCount=0,resolveFirst;
   const firstRequest=new Promise(resolve=>{resolveFirst=resolve;});
   const guide={channels:[{id:'Azteca.mx',schedule:[]}]};
+  const requested=[];
   const hass={callApi:(method,url)=>{
-    assert.equal(method,'GET');assert.equal(url,'totalplay_stb/epg');
+    assert.equal(method,'GET');
+    requested.push(url);
     fetchCount++;
     return fetchCount===1?firstRequest:Promise.resolve(guide);
   }};
@@ -40,6 +39,8 @@ vm.runInContext(code.replace(/^import .*;\s*/m,''),sandbox);
   assert.equal(fetchCount,1,'A new card reuses the already loaded guide immediately');
   await third._loadGuide(true);
   assert.equal(fetchCount,2,'Explicit refresh must bypass the browser cache');
+  assert.deepEqual(requested,['totalplay_stb/epg','totalplay_stb/epg?refresh=1'],
+    'The refresh button must refresh the server-side cache, too');
   const channels=third._channels();
   assert.equal(third._channels(),channels);
   assert.equal(third.matches,1,'Repeated guide renders reuse the channel mapping');
@@ -49,5 +50,5 @@ vm.runInContext(code.replace(/^import .*;\s*/m,''),sandbox);
   third.setConfig({epg:true,channels:[{number:'2'}]});
   third._channels();
   assert.equal(third.matches,3,'Changing configuration invalidates the channel cache');
-  console.log('PASS: concurrent EPG fetch shared, cached schedule reused, manual refresh honored, channel mappings memoized');
+  console.log('PASS: concurrent EPG fetch shared, cached schedule reused, backend refresh honored, channel mappings memoized');
 })().catch(error=>{console.error(error);process.exitCode=1;});
