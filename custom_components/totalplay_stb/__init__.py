@@ -10,8 +10,8 @@ from homeassistant.core import HomeAssistant
 from .artwork import TotalplayArtworkView
 from .card_resource import async_register_card_resource
 from .const import DOMAIN
+from .artwork import TotalplayArtworkView
 from .epg_manager import TotalplayCachedGuideView
-from .logo_cache import CACHE_URL, TotalplayLogoCache
 
 _LOGGER = logging.getLogger(__name__)
 PLATFORMS = ["remote", "media_player"]
@@ -21,11 +21,11 @@ _CARD_URL = "/totalplay_stb/totalplay-stb-card.js"
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up decoder entities, shared EPG and persistent artwork cache."""
     domain_data = hass.data.setdefault(DOMAIN, {})
-    logo_cache = domain_data.get("logo_cache")
-    if logo_cache is None:
-        logo_cache = TotalplayLogoCache(hass)
-        await logo_cache.async_prepare()
-        domain_data["logo_cache"] = logo_cache
+    artwork_view = domain_data.get("artwork_view")
+    if artwork_view is None:
+        artwork_view = TotalplayArtworkView(hass)
+        hass.http.register_view(artwork_view)
+        domain_data["artwork_view"] = artwork_view
 
     if not domain_data.get("card_registered"):
         # Keep the public URL and card type stable for existing dashboards.
