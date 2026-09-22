@@ -3,17 +3,26 @@
     "step": {
       "user": {
         "title": "Control local del decodificador Totalplay",
-        "description": "Configura la conexión local del decodificador. La televisión y la entrada HDMI se seleccionan después.",
+        "description": "Deja la IP vacía para detectar decodificadores Totalplay automáticamente. Si introduces una IP, la integración la verifica con el mismo endpoint de información usado durante la detección.",
         "data": {
-          "host": "Dirección IP del decodificador",
-          "port": "Puerto HTTP"
+          "host": "Dirección IP del decodificador (vacía = detectar)",
+          "port": "Puerto HTTP",
+          "stb_model": "Modelo del STB (vacío = detectar automáticamente)"
+        }
+      },
+      "discovered": {
+        "title": "Seleccionar decodificador Totalplay",
+        "description": "Más de un decodificador Totalplay respondió a la consulta de información del STB.",
+        "data": {
+          "host": "Decodificador detectado"
         }
       },
       "display": {
         "title": "Televisión conectada",
         "description": "Elige la televisión o reproductor al que está conectado el decodificador por HDMI. Deja el campo vacío si no está disponible en Home Assistant.",
         "data": {
-          "tv_entity": "Televisión / reproductor conectado"
+          "tv_entity": "Televisión / reproductor conectado",
+          "power_switch": "Interruptor auxiliar de energía del STB (opcional)"
         }
       },
       "source": {
@@ -27,7 +36,9 @@
     "error": {
       "cannot_connect": "No se pudo conectar a esa dirección IP y puerto",
       "invalid_host": "Introduce una dirección IPv4 privada",
-      "invalid_source": "Selecciona una entrada de televisión válida"
+      "invalid_source": "Selecciona una entrada de televisión válida",
+      "no_stb_found": "No se encontró ningún decodificador Totalplay en las redes locales detectadas",
+      "not_totalplay_stb": "La dirección responde, pero no se identificó como un decodificador Totalplay"
     },
     "abort": {
       "already_configured": "Este decodificador ya está configurado"
@@ -36,10 +47,12 @@
   "options": {
     "step": {
       "init": {
-        "title": "Televisión conectada",
-        "description": "Elige la televisión o reproductor conectado al decodificador. Deja el campo vacío para desactivar la selección automática de entrada.",
+        "title": "Decodificador y televisión conectada",
+        "description": "Edita el modelo del STB y el hardware conectado sin eliminar la integración.",
         "data": {
-          "tv_entity": "Televisión / reproductor conectado"
+          "stb_model": "Modelo del STB",
+          "tv_entity": "Televisión / reproductor conectado",
+          "power_switch": "Interruptor auxiliar de energía del STB (opcional)"
         }
       },
       "source": {

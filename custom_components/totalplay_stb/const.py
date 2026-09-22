@@ -1,8 +1,10 @@
-"""Constants for the Totalplay STB local remote preview."""
+"""Constants for the Totalplay STB local remote."""
 
 DOMAIN = "totalplay_stb"
 DEFAULT_HOST = ""
 DEFAULT_PORT = 80
+CONF_MODEL = "stb_model"
+UNKNOWN_MODEL = "Totalplay STB"
 
 # Keys recovered from the Totalplay Control 1.2.28 Android APK.
 KEYS = frozenset({
