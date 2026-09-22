@@ -10,7 +10,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Align launcher and support approved Totalplay vertical logo
+      - name: Align popup launcher and restore approved Totalplay vertical logo
         run: |
           set -euo pipefail
           python3 - <<'PY'
@@ -27,32 +27,34 @@ jobs:
           replace('button{display:flex;align-items:center;gap:11px;width:100%;min-height:58px;padding:10px 14px;', 'button{display:flex;align-items:center;justify-content:center;gap:10px;width:100%;height:100%;min-height:var(--popup-button-height);box-sizing:border-box;padding:8px;')
           replace('.tp-p-expand{width:20px;height:20px;flex:none;opacity:.7}', '.tp-p-expand{width:20px;height:20px;flex:none;opacity:.7}\n.tp-p-vertical{justify-content:center;padding:8px}\n.tp-p-logo{display:block;width:auto;max-width:100%;height:104px;max-height:104px;object-fit:contain}')
           replace('  getCardSize() {return 1;}', "  getCardSize() {return this._config?.popup_button_style === 'vertical_logo' ? 2 : 1;}")
-          old='    button.append(mark,name,expand);\n    button.addEventListener(\'click\',()=>this._openPopup());'
-          new='''    button.append(mark,name,expand);
-    if (this._config.popup_button_style === 'vertical_logo') {
-      button.classList.add('tp-p-vertical');
-      const logo=document.createElement('img');
-      logo.className='tp-p-logo';logo.alt='';
-      logo.addEventListener('load',()=>{mark.hidden=true;name.hidden=true;expand.hidden=true;});
-      logo.addEventListener('error',()=>{logo.remove();mark.hidden=false;name.hidden=false;expand.hidden=false;});
-      button.appendChild(logo);
-      logo.src='/totalplay_stb/brand/totalplay-vertical-approved.png?v=0.3.57';
-    }
-    button.addEventListener('click',()=>this._openPopup());'''
-          replace(old,new)
+          old="    button.append(mark,name,expand);\n    button.addEventListener('click',()=>this._openPopup());"
+          lines=[
+              '    button.append(mark,name,expand);',
+              "    if (this._config.popup_button_style === 'vertical_logo') {",
+              "      button.classList.add('tp-p-vertical');",
+              "      const logo=document.createElement('img');",
+              "      logo.className='tp-p-logo';logo.alt='';",
+              "      logo.addEventListener('load',()=>{mark.hidden=true;name.hidden=true;expand.hidden=true;});",
+              "      logo.addEventListener('error',()=>{logo.remove();mark.hidden=false;name.hidden=false;expand.hidden=false;});",
+              '      button.appendChild(logo);',
+              "      logo.src='/totalplay_stb/brand/totalplay-vertical-approved.png?v=0.3.57';",
+              '    }',
+              "    button.addEventListener('click',()=>this._openPopup());",
+          ]
+          replace(old,'\n'.join(lines))
           p.write_text(s)
           brand=root/'www/brand'
           logo=base64.b64decode((brand/'totalplay-vertical-approved.png.b64').read_text())
-          assert logo.startswith(b'\x89PNG\r\n\x1a\n'), 'Approved Totalplay logo is not a PNG'
+          assert logo.startswith(bytes.fromhex('89504e470d0a1a0a'))
           (brand/'totalplay-vertical-approved.png').write_bytes(logo)
           m=root/'manifest.json'
           data=json.loads(m.read_text())
           assert data['version']=='0.3.56', data['version']
           data['version']='0.3.57'
           m.write_text(json.dumps(data,indent=2)+'\n')
-          print('Totalplay popup button is 120px; vertical_logo uses the approved existing logo; v0.3.57')
+          print('Totalplay popup launcher height 120px, approved vertical logo, version 0.3.57')
           PY
-      - name: Validate JavaScript, Python, and PNG
+      - name: Validate JavaScript, manifest and PNG
         run: |
           node --check custom_components/totalplay_stb/www/totalplay-stb-popup-card.js
           python3 -m json.tool custom_components/totalplay_stb/manifest.json >/dev/null
@@ -66,4 +68,4 @@ jobs:
           git add custom_components/totalplay_stb/www/totalplay-stb-popup-card.js custom_components/totalplay_stb/www/brand/totalplay-vertical-approved.png custom_components/totalplay_stb/manifest.json
           git commit -m 'v0.3.57: align Totalplay popup launcher and use approved vertical logo'
           git push origin HEAD:main
-          gh release create v0.3.57 --target "$(git rev-parse HEAD)" --title v0.3.57 --notes 'Align Totalplay popup launcher to 120px, match border radius and padding, and support popup_button_style: vertical_logo using the existing approved multicolor logo. Full guide and remote remain unchanged.'
+          gh release create v0.3.57 --target "$(git rev-parse HEAD)" --title v0.3.57 --notes 'Align Totalplay popup launcher to 120px, match border radius and padding, and support vertical_logo using the approved multicolor logo. Full guide and remote remain unchanged.'
