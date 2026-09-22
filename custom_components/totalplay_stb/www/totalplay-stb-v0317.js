@@ -4,8 +4,8 @@ import './totalplay-stb-v0316.js?v=0.3.17';
 const TP_FAST_CARD = customElements.get('totalplay-stb-card');
 if (!TP_FAST_CARD) throw new Error('Totalplay card did not load');
 
-// These values live only in the current browser tab. The server retains its
-// separate 15-minute XMLTV cache and authenticates every HTTP request.
+// These values live only in the current browser tab. The server independently
+// maintains the rolling XMLTV cache and authenticates every HTTP request.
 const TP_GUIDE_REUSE_MS = 5 * 60 * 1000;
 const tpSharedGuide = {guide:null, fetched:0, pending:null};
 const tpPreviousFastLoadGuide = TP_FAST_CARD.prototype._loadGuide;
@@ -22,10 +22,11 @@ TP_FAST_CARD.prototype._loadGuide = async function(force=false) {
     return;
   }
   this._loadingGuide = true;
-  // Multiple dashboard cards mounted together share one authenticated call.
-  // A manual refresh bypasses the in-memory cache, but joins a running call.
+  // Multiple dashboard cards mounted together share an authenticated call.
+  // A manual refresh also explicitly refreshes the backend, instead of merely
+  // re-reading the old 30-minute server cache.
   const request = tpSharedGuide.pending || Promise.resolve().then(() =>
-    this._hass.callApi('GET', 'totalplay_stb/epg'));
+    this._hass.callApi('GET', force ? 'totalplay_stb/epg?refresh=1' : 'totalplay_stb/epg'));
   if (!tpSharedGuide.pending) tpSharedGuide.pending = request;
   try {
     const guide = await request;
