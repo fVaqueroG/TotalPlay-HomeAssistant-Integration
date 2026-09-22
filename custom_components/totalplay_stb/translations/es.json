@@ -3,7 +3,7 @@
     "step": {
       "user": {
         "title": "Control local del decodificador Totalplay",
-        "description": "Deja la IP vacía para detectar decodificadores Totalplay automáticamente. Si introduces una IP, la integración la verifica con el mismo endpoint de información usado durante la detección.",
+        "description": "Deja la IP vacía para buscar decodificadores Totalplay identificables. Si introduces una IP, se intenta la misma consulta de identificación; si falla, podrás configurar manualmente tu STB conocido. La configuración manual no garantiza que funcionen los comandos del control remoto.",
         "data": {
           "host": "Dirección IP del decodificador (vacía = detectar)",
           "port": "Puerto HTTP",
@@ -12,7 +12,7 @@
       },
       "discovered": {
         "title": "Seleccionar decodificador Totalplay",
-        "description": "Más de un decodificador Totalplay respondió a la consulta de información del STB.",
+        "description": "Se encontró más de un decodificador Totalplay identificable.",
         "data": {
           "host": "Decodificador detectado"
         }
@@ -37,8 +37,8 @@
       "cannot_connect": "No se pudo conectar a esa dirección IP y puerto",
       "invalid_host": "Introduce una dirección IPv4 privada",
       "invalid_source": "Selecciona una entrada de televisión válida",
-      "no_stb_found": "No se encontró ningún decodificador Totalplay en las redes locales detectadas",
-      "not_totalplay_stb": "La dirección responde, pero no se identificó como un decodificador Totalplay"
+      "no_stb_found": "No se identificó ningún decodificador Totalplay en las redes locales detectadas. Introduce manualmente la IP de tu STB para continuar.",
+      "not_totalplay_stb": "No se pudo identificar automáticamente esta dirección. Puedes continuar con la configuración manual."
     },
     "abort": {
       "already_configured": "Este decodificador ya está configurado"
