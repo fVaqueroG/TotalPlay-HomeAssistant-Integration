@@ -9,7 +9,7 @@ from homeassistant.core import HomeAssistant
 
 from .card_resource import async_register_card_resource
 from .const import DOMAIN
-from .epg import TotalplayGuideView
+from .epg_manager import TotalplayCachedGuideView
 
 _LOGGER = logging.getLogger(__name__)
 PLATFORMS = ["remote", "media_player"]
@@ -17,15 +17,16 @@ _CARD_URL = "/totalplay_stb/totalplay-stb-card.js"
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
-    """Set up decoder entities and serve the authenticated EPG plus card resource."""
+    """Set up decoder entities and pre-warm a single authenticated EPG cache."""
     domain_data = hass.data.setdefault(DOMAIN, {})
     if not domain_data.get("card_registered"):
-        # Preserve the public URL and custom card type so existing dashboards
-        # and visual-editor configuration survive upgrades.
+        # Preserve the public URL and card type so existing Lovelace settings
+        # and the visual editor continue to work across frontend updates.
         www = Path(__file__).parent / "www"
         await hass.http.async_register_static_paths(
             [
-                StaticPathConfig(_CARD_URL, str(www / "totalplay-stb-v0317.js"), False),
+                StaticPathConfig(_CARD_URL, str(www / "totalplay-stb-v0318.js"), False),
+                StaticPathConfig("/totalplay_stb/totalplay-stb-v0317.js", str(www / "totalplay-stb-v0317.js"), False),
                 StaticPathConfig("/totalplay_stb/totalplay-stb-v0316.js", str(www / "totalplay-stb-v0316.js"), False),
                 StaticPathConfig("/totalplay_stb/totalplay-stb-v0315.js", str(www / "totalplay-stb-v0315.js"), False),
                 StaticPathConfig("/totalplay_stb/totalplay-stb-v0313.js", str(www / "totalplay-stb-v0313.js"), False),
@@ -40,7 +41,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                 StaticPathConfig("/totalplay_stb/lineup.txt", str(www / "lineup.txt"), False),
             ]
         )
-        hass.http.register_view(TotalplayGuideView(hass))
+        view = TotalplayCachedGuideView(hass)
+        hass.http.register_view(view)
+        domain_data["guide_view"] = view
         domain_data["card_registered"] = True
 
     if not domain_data.get("resource_registered"):
@@ -50,9 +53,19 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             _LOGGER.exception("Could not register the Totalplay Lovelace card resource")
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
+    domain_data.setdefault("active_entries", set()).add(entry.entry_id)
+    # Only the first decoder starts the timer; subsequent config entries share it.
+    domain_data["guide_view"].async_start()
     return True
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
-    """Unload entities. Existing HTTP routes remain valid until HA restarts."""
-    return await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
+    """Unload decoder entities and stop EPG updates when none remain."""
+    unloaded = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
+    if unloaded:
+        domain_data = hass.data.get(DOMAIN, {})
+        entries = domain_data.get("active_entries", set())
+        entries.discard(entry.entry_id)
+        if not entries and domain_data.get("guide_view"):
+            domain_data["guide_view"].async_stop()
+    return unloaded
