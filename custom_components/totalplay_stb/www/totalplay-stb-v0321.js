@@ -7,7 +7,6 @@ import './totalplay-stb-v0320.js?v=0.3.21';
 const TP_OFFICIAL_DATA_URL = '/totalplay_stb/premium-catalog.zlib.txt';
 const TP_OFFICIAL_SOURCE = 'https://totalplay.com.mx/canales';
 const TP_IMAGE_ROOT = 'https://imgn.cdn.iutpcdn.com/IMGS/CHANNEL/';
-const TP_IMAGE_CACHE_ROOT = '/totalplay_stb_cache';
 const TP_CARD = customElements.get('totalplay-stb-card');
 if (!TP_CARD) throw new Error('Totalplay card unavailable');
 let tpCatalogPromise;
@@ -29,14 +28,11 @@ async function tpGetOfficialCatalog() {
         throw new Error('Invalid or duplicate official Totalplay channel');
       }
       seen.add(number);
-      const remoteLogo = `${TP_IMAGE_ROOT}SUPER_LIGHT/${lightId}-8c.png`;
-      const remoteFallback = Number.isInteger(superId) && superId > 0
-        ? `${TP_IMAGE_ROOT}SUPER/${superId}-8c.png` : null;
       const entry = {
         number: String(number), name, category: categories[group], type,
-        logo_url: `${TP_IMAGE_CACHE_ROOT}/${type === 'I' ? 'apps' : 'channels'}/${number}.png`,
-        logo_fallback_url: remoteLogo,
-        logo_second_fallback_url: remoteFallback,
+        logo_url: `${TP_IMAGE_ROOT}SUPER_LIGHT/${lightId}-8c.png`,
+        logo_fallback_url: Number.isInteger(superId) && superId > 0
+          ? `${TP_IMAGE_ROOT}SUPER/${superId}-8c.png` : null,
       };
       (type === 'I' ? apps : channels).push(entry);
     }
@@ -100,14 +96,10 @@ TP_CARD.prototype._renderGuide = function() {
     img.loading = 'lazy';
     img.decoding = 'async';
     img.referrerPolicy = 'no-referrer';
-    const fallbacks = [entry.logo_fallback_url, entry.logo_second_fallback_url].filter(Boolean);
-    let fallbackIndex = 0;
     img.onerror = () => {
-      while (fallbackIndex < fallbacks.length) {
-        const next = fallbacks[fallbackIndex++];
-        if (next && img.src !== next) { img.src = next; return; }
-      }
-      if (img.parentElement === badge) badge.replaceChildren(initials);
+      if (entry.logo_fallback_url && img.src !== entry.logo_fallback_url) {
+        img.src = entry.logo_fallback_url;
+      } else if (img.parentElement === badge) { badge.replaceChildren(initials); }
     };
     img.src = entry.logo_url;
     badge.replaceChildren(img);
@@ -134,14 +126,9 @@ TP_CARD.prototype._renderApps = function() {
       image.loading = 'lazy';
       image.decoding = 'async';
       image.referrerPolicy = 'no-referrer';
-      const fallbacks = [entry.logo_fallback_url, entry.logo_second_fallback_url].filter(Boolean);
-      let fallbackIndex = 0;
       image.onerror = () => {
-        while (fallbackIndex < fallbacks.length) {
-          const next = fallbacks[fallbackIndex++];
-          if (next && image.src !== next) { image.src = next; return; }
-        }
-        image.remove(); text.hidden = false;
+        if (entry.logo_fallback_url && image.src !== entry.logo_fallback_url) image.src = entry.logo_fallback_url;
+        else {image.remove(); text.hidden = false;}
       };
       image.src = entry.logo_url;
       text.hidden = true;
