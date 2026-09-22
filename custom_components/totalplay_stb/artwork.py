@@ -23,6 +23,7 @@ from homeassistant.helpers.aiohttp_client import async_get_clientsession
 _LOGGER = logging.getLogger(__name__)
 _ARTWORK_URL = "/totalplay_stb/artwork/{kind}/{image_id}"
 _BRAND_URL = "https://www.totalplay.com.mx/assetsv2/img/header/totalplay-logoWhite.svg"
+_VERTICAL_BRAND_URL = "https://upload.wikimedia.org/wikipedia/commons/b/bf/Logo_TotalPlay.svg"
 _CHANNEL_ROOT = "https://imgn.cdn.iutpcdn.com/IMGS/CHANNEL/"
 _TIMEOUT = ClientTimeout(total=30, connect=8, sock_read=15)
 _MAX_IMAGE_BYTES = 1_000_000
@@ -52,7 +53,7 @@ def _catalog_ids(bundle: Path) -> dict[str, set[str]]:
     categories, rows = json.loads(decoded)
     if not isinstance(categories, list) or not isinstance(rows, list) or len(rows) != 313:
         raise ValueError("Invalid official Totalplay channel list")
-    image_ids = {"light": set(), "super": set(), "brand": {"totalplay"}}
+    image_ids = {"light": set(), "super": set(), "brand": {"totalplay", "vertical"}}
     for row in rows:
         if not isinstance(row, list) or len(row) < 6 or row[3] not in {"C", "M", "I"}:
             raise ValueError("Invalid Totalplay artwork entry")
@@ -148,7 +149,8 @@ class TotalplayArtworkView(HomeAssistantView):
                 return cached
             if self._failed_until.get(filename, 0) > time.monotonic():
                 return None
-            source = (_BRAND_URL if kind == "brand" else
+            source = ((_VERTICAL_BRAND_URL if image_id == "vertical" else _BRAND_URL)
+                      if kind == "brand" else
                       f"{_CHANNEL_ROOT}{'SUPER_LIGHT' if kind == 'light' else 'SUPER'}/{image_id}-8c.png")
             try:
                 async with self._download_limit:
@@ -174,7 +176,7 @@ class TotalplayArtworkView(HomeAssistantView):
 
     async def get(self, request: web.Request, kind: str, image_id: str) -> web.Response:
         if kind not in {"light", "super", "brand"} or not re.fullmatch(
-            r"[0-9]{1,8}" if kind != "brand" else r"totalplay", image_id
+            r"[0-9]{1,8}" if kind != "brand" else r"(?:totalplay|vertical)", image_id
         ):
             raise web.HTTPNotFound()
         raw = await self._image(kind, image_id)
@@ -200,7 +202,8 @@ class TotalplayArtworkView(HomeAssistantView):
             await self._prepare()
             # Preload all official channel and app primary artwork once. The
             # SUPER fallback is fetched only when a displayed image needs it.
-            targets = [("brand", "totalplay"), *[("light", value) for value in
+            targets = [("brand", "totalplay"), ("brand", "vertical"),
+                       *[("light", value) for value in
                        sorted(self._allowed["light"], key=int)]]
             completed = await asyncio.gather(
                 *(self._image(kind, image_id) for kind, image_id in targets),
