@@ -26,7 +26,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         await hass.http.async_register_static_paths(
             [
                 StaticPathConfig(
-                    _CARD_URL, str(www / "totalplay-stb-v0340.js"), False
+                    _CARD_URL, str(www / "totalplay-stb-v0341.js"), False
                 ),
                 *(
                     StaticPathConfig(
