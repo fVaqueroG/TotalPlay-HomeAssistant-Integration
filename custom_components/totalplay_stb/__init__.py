@@ -28,18 +28,13 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         await hass.http.async_register_static_paths(
             [
                 StaticPathConfig(
-                    _CARD_URL, str(www / "totalplay-stb-v0353.js"), False
+                    _CARD_URL, str(www / "totalplay-stb-v0354.js"), False
                 ),
                 *(
                     StaticPathConfig(
                         f"/totalplay_stb/{module.name}", str(module), False
                     )
                     for module in sorted(www.glob("*.js"))
-                ),
-                StaticPathConfig(
-                    "/totalplay_stb/totalplay-vertical-logo.png",
-                    str(www / "brand" / "totalplay-vertical-white.png"),
-                    False,
                 ),
                 StaticPathConfig(
                     "/totalplay_stb/premium-catalog.zlib.txt",
