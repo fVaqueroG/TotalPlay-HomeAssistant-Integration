@@ -34,8 +34,9 @@ const tpWideNode = (tag,cls,text) => {
 };
 const tpPreviousWideRender = TP_WIDE_CARD.prototype._renderGuide;
 TP_WIDE_CARD.prototype._renderGuide = function () {
-  // Reuse the existing filtering, vertical infinite scroll, matching, remote,
-  // search, channel-tuning handlers and status diagnostics.
+  // Retain horizontal position before the base renderer rebuilds its two-hour
+  // DOM: it can otherwise clamp scrollLeft while the old short row is in place.
+  const requestedX=this._scroll?.scrollLeft||0;
   tpPreviousWideRender.call(this);
   const scroll=this._scroll,head=this._times,rows=this._rows;
   if(!scroll||!head||!rows)return;
@@ -61,7 +62,6 @@ TP_WIDE_CARD.prototype._renderGuide = function () {
   const slotWidth=Math.max(1,(viewport-channelWidth)/4);
   const totalWidth=slotWidth*slots;
   const previousSlot=this._tpWideSlotWidth;
-  const previousX=scroll.scrollLeft;
   this._tpWideSlotWidth=slotWidth;
   this._tpWideStart=start;
   this._tpWideEnd=end;
@@ -112,10 +112,10 @@ TP_WIDE_CARD.prototype._renderGuide = function () {
     marker.style.left=`${100*(now-start)/(end-start)}%`;
     timeline.appendChild(marker);
   }
-  // Preserve which *time* the viewer was looking at if the dashboard resizes.
-  if(previousSlot&&Math.abs(previousSlot-slotWidth)>0.5){
-    scroll.scrollLeft=previousX*slotWidth/previousSlot;
-  }
+  // Restore the same *time* after all rows have their expanded widths, even
+  // if the original two-hour renderer temporarily clamped scrollLeft to zero.
+  scroll.scrollLeft=previousSlot&&Math.abs(previousSlot-slotWidth)>0.5
+    ? requestedX*slotWidth/previousSlot : requestedX;
   this._tpUpdateWideControls?.();
 };
 TP_WIDE_CARD.prototype._tpUpdateWideControls = function () {
