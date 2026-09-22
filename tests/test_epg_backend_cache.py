@@ -13,14 +13,14 @@ from test_epg_fallback import epg, pkg, ha, helpers
 EVENTS = []
 event = ModuleType('homeassistant.helpers.event')
 
-def schedule(_hass, callback, interval):
-    record = {'callback': callback, 'interval': interval, 'cancelled': False}
+def schedule(_hass, callback, *, minute, second):
+    record = {'callback': callback, 'minute': minute, 'second': second, 'cancelled': False}
     EVENTS.append(record)
     def cancel():
         record['cancelled'] = True
     return cancel
 
-event.async_track_time_interval = schedule
+event.async_track_time_change = schedule
 ROOT = Path(__file__).resolve().parents[1] / 'custom_components' / 'totalplay_stb'
 with patch.dict(sys.modules, {
     'homeassistant': ha, 'homeassistant.helpers': helpers,
@@ -61,24 +61,24 @@ class BackendCacheTests(unittest.IsolatedAsyncioTestCase):
     async def asyncTearDown(self):
         self.view.async_stop()
 
-    async def test_preload_and_thirty_minute_refresh_are_independent_of_dashboard(self):
+    async def test_preload_and_clock_aligned_refresh_are_independent_of_dashboard(self):
         self.view.async_start()
         self.view.async_start()
-        self.assertEqual(len(EVENTS), 1, 'Only one half-hour timer is registered')
-        self.assertEqual(EVENTS[0]['interval'], timedelta(minutes=30))
+        self.assertEqual(len(EVENTS), 1, 'Only one half-hour clock listener is registered')
+        self.assertEqual(EVENTS[0]['minute'], [0, 30], 'Use :00 and :30, not rolling interval')
+        self.assertEqual(EVENTS[0]['second'], 0, 'Start at the beginning of the minute')
         await self.view._startup_task
         self.assertEqual(self.fetches, 1, 'Home Assistant preloads without an API request')
         response = await self.view.get(SimpleNamespace(query={}))
         self.assertEqual(self.fetches, 1, 'An ordinary card receives the prepared cache')
-        schedule = response['channels'][0]['schedule']
-        self.assertEqual([p['title'] for p in schedule], ['Current show', 'Upcoming show'])
+        guide = response['channels'][0]['schedule']
+        self.assertEqual([p['title'] for p in guide], ['Current show', 'Upcoming show'])
         self.assertEqual(response['window_programme_count'], 2)
-        # Even an expired old refresh deadline must not make a card download XMLTV.
         self.view._next_refresh = 0
         await self.view.get(SimpleNamespace(query={}))
-        self.assertEqual(self.fetches, 1)
+        self.assertEqual(self.fetches, 1, 'Opening a card does not trigger XMLTV fetches')
         await EVENTS[0]['callback'](None)
-        self.assertEqual(self.fetches, 2, 'Backend timer fetches the new schedule')
+        self.assertEqual(self.fetches, 2, 'Clock-aligned callback refreshes schedule')
         await self.view.get(SimpleNamespace(query={'refresh':'1'}))
         self.assertEqual(self.fetches, 3, 'Explicit Refresh guide bypasses the timer')
         self.view.async_stop()
