@@ -1,11 +1,12 @@
 """Command-only media player for Totalplay STBs.
 
-The local key endpoint has no verified power, channel, playback or volume
-feedback. Do not report inferred STB state as actual state.
+The decoder remote has no verified playback, channel, power, or volume feedback.
+The linked TV's reported HDMI source is observed independently of STB commands.
 """
 
 import asyncio
 import re
+import time
 from typing import Any
 
 from homeassistant.components.media_player import (
@@ -15,12 +16,18 @@ from homeassistant.components.media_player import (
 )
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_HOST, CONF_PORT
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.helpers.event import async_track_state_change_event
 
 from .const import CONF_MODEL, DOMAIN, UNKNOWN_MODEL
-from .display import async_ensure_display_source, configured_display, configured_power_switch
+from .display import (
+    async_ensure_display_source,
+    configured_display,
+    configured_power_switch,
+    observed_display_status,
+)
 from .http import async_send_key
 
 _NETFLIX_CHANNEL = "333"
@@ -29,6 +36,7 @@ _MENU_EXIT_DELAY_SECS = 0.10
 _APP_LAUNCH_WAIT_SECS = 5.0
 _NETFLIX_LAUNCH_WAIT_SECS = _APP_LAUNCH_WAIT_SECS
 _CHANNEL_PATTERN = re.compile(r"[0-9]{1,4}\Z")
+_SOURCE_RETRY_INTERVAL_SECS = 15.0
 
 
 def _validated_channel(value: str) -> str:
@@ -67,6 +75,7 @@ class TotalplayMediaPlayer(MediaPlayerEntity):
         self._model = entry.data.get(CONF_MODEL, UNKNOWN_MODEL)
         self._last_requested_channel: str | None = None
         self._last_tv_input_check = "not_checked"
+        self._last_tv_input_request_time = 0.0
         self._command_lock = asyncio.Lock()
         self._attr_unique_id = f"{DOMAIN}_{self._host}_{self._port}_media_player"
         self._attr_device_info = {
@@ -76,6 +85,38 @@ class TotalplayMediaPlayer(MediaPlayerEntity):
             "model": self._model,
             "configuration_url": f"http://{self._host}:{self._port}",
         }
+
+    async def async_added_to_hass(self) -> None:
+        """Follow delayed HDMI-source reports from the configured *physical* TV."""
+        await super().async_added_to_hass()
+        tv_entity, _ = configured_display(self._entry)
+        if tv_entity:
+            self.async_on_remove(async_track_state_change_event(
+                self._hass, [tv_entity], self._linked_tv_changed
+            ))
+            self._update_linked_tv_status(self._hass.states.get(tv_entity))
+
+    @callback
+    def _linked_tv_changed(self, event) -> None:
+        self._update_linked_tv_status(event.data.get("new_state"))
+
+    @callback
+    def _update_linked_tv_status(self, state) -> None:
+        """Reconcile a later TV state; never leave stale 'unconfirmed' feedback."""
+        tv_entity, target = configured_display(self._entry)
+        if not tv_entity or not target:
+            return
+        result = observed_display_status(state, target)
+        if result == "source_unknown":
+            # A TV that reports no source cannot confirm a previous command.
+            # Preserve the pending warning, but revoke old verified feedback.
+            if self._last_tv_input_check != "verified":
+                return
+        if result == "tv_unavailable" and self._last_tv_input_check == "not_checked":
+            return
+        if result != self._last_tv_input_check:
+            self._last_tv_input_check = result
+            self.async_write_ha_state()
 
     @property
     def extra_state_attributes(self) -> dict[str, str | None]:
@@ -96,7 +137,30 @@ class TotalplayMediaPlayer(MediaPlayerEntity):
                 await asyncio.sleep(delay)
 
     async def _ensure_tv_input(self) -> None:
-        self._last_tv_input_check = await async_ensure_display_source(self._hass, self._entry)
+        tv_entity, target = configured_display(self._entry)
+        if tv_entity and target:
+            observed = observed_display_status(self._hass.states.get(tv_entity), target)
+            if observed == "verified":
+                self._last_tv_input_check = "verified"
+                self.async_write_ha_state()
+                return
+            # Do not send a new HDMI command for every channel change while a
+            # just-requested input is still awaiting feedback from the TV.
+            if self._last_tv_input_check == "switch_unconfirmed" and (
+                time.monotonic() - self._last_tv_input_request_time
+                < _SOURCE_RETRY_INTERVAL_SECS
+            ) and observed == "source_unknown":
+                return
+
+        self._last_tv_input_request_time = time.monotonic()
+        self._last_tv_input_check = "checking"
+        self.async_write_ha_state()
+        result = await async_ensure_display_source(self._hass, self._entry)
+        if tv_entity and target and observed_display_status(
+            self._hass.states.get(tv_entity), target
+        ) == "verified":
+            result = "verified"
+        self._last_tv_input_check = result
         self.async_write_ha_state()
 
     async def _prepare_for_channel_selection(self) -> None:
