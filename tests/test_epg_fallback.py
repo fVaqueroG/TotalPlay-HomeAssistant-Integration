@@ -1,4 +1,4 @@
-"""Test XMLTV multi-source merging and bounded guide parsing without HA/network."""
+"""Test independent EPG aggregation, fallback and bounded XMLTV parsing."""
 import gzip
 import importlib.util
 from datetime import datetime, timedelta, timezone
@@ -72,7 +72,7 @@ class EpgFallbackTests(unittest.IsolatedAsyncioTestCase):
         view._download = download
         await view._refresh()
         self.assertEqual(attempted, list(epg.GUIDE_SOURCES))
-        self.assertEqual(len(view._guide['sources']), 3)
+        self.assertEqual(len(view._guide['sources']), len(epg.GUIDE_SOURCES))
         self.assertEqual(len(view._guide['channels']), 2)
         self.assertEqual(view._guide['channels'][0]['schedule'][0]['title'], 'Live')
         self.assertIsNone(view._guide['error'])
@@ -87,7 +87,7 @@ class EpgFallbackTests(unittest.IsolatedAsyncioTestCase):
             return CURRENT
         view._download = download
         await view._refresh()
-        self.assertEqual(len(view._guide['sources']), 1)
+        self.assertEqual(len(view._guide['sources']), len(epg.GUIDE_SOURCES) - 2)
         self.assertTrue(view._guide['fallback'])
         self.assertEqual(view._guide['source'], epg.BACKUP_GUIDE_URL)
         self.assertEqual(len(view._guide['source_errors']), 2)
@@ -101,7 +101,7 @@ class EpgFallbackTests(unittest.IsolatedAsyncioTestCase):
             return CURRENT
         view._download = download
         await view._refresh()
-        self.assertEqual(len(view._guide['sources']), 2)
+        self.assertEqual(len(view._guide['sources']), len(epg.GUIDE_SOURCES) - 1)
         self.assertEqual(view._guide['source'], epg.BACKUP_GUIDE_URL)
         self.assertEqual(len(view._guide['source_errors']), 1)
 
@@ -116,7 +116,7 @@ class EpgFallbackTests(unittest.IsolatedAsyncioTestCase):
         await view._refresh()
         self.assertEqual(view._guide['channels'], CURRENT['channels'])
         self.assertTrue(view._guide['using_cached_guide'])
-        self.assertEqual(len(view._guide['source_errors']), 3)
+        self.assertEqual(len(view._guide['source_errors']), len(epg.GUIDE_SOURCES))
         self.assertIn('HTTP 403', view._guide['error'])
         self.assertIn('timed out', view._guide['error'])
         self.assertNotIn('private backend detail', view._guide['error'])
