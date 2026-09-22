@@ -3,17 +3,26 @@
     "step": {
       "user": {
         "title": "Totalplay STB local remote",
-        "description": "Configure your decoder's local connection. The TV/HDMI input is selected in the next step.",
+        "description": "Leave the IP blank to discover Totalplay decoders automatically. If you enter an IP, the integration verifies it with the same STB information endpoint used by discovery.",
         "data": {
-          "host": "Decoder IP address",
-          "port": "HTTP port"
+          "host": "Decoder IP address (blank = discover)",
+          "port": "HTTP port",
+          "stb_model": "STB model (blank = auto-detect)"
+        }
+      },
+      "discovered": {
+        "title": "Select Totalplay decoder",
+        "description": "More than one Totalplay decoder responded to the STB information probe.",
+        "data": {
+          "host": "Detected decoder"
         }
       },
       "display": {
         "title": "Connected television",
         "description": "Select the TV or media player that displays this decoder's HDMI output. Leave blank if it is not available in Home Assistant.",
         "data": {
-          "tv_entity": "Connected TV / display media player"
+          "tv_entity": "Connected TV / display media player",
+          "power_switch": "Optional STB power helper switch"
         }
       },
       "source": {
@@ -27,7 +36,9 @@
     "error": {
       "cannot_connect": "Could not reach this IP address and port",
       "invalid_host": "Enter a private IPv4 address",
-      "invalid_source": "Select a non-empty TV input"
+      "invalid_source": "Select a non-empty TV input",
+      "no_stb_found": "No Totalplay decoder responded on the detected local networks",
+      "not_totalplay_stb": "The address is reachable, but it did not respond as a Totalplay STB"
     },
     "abort": {
       "already_configured": "This decoder is already configured"
@@ -36,10 +47,12 @@
   "options": {
     "step": {
       "init": {
-        "title": "Connected television",
-        "description": "Choose the TV or media player connected to your Totalplay decoder. Leave blank to disable automatic input selection.",
+        "title": "Decoder and connected television",
+        "description": "Edit the STB model and connected hardware without removing the integration.",
         "data": {
-          "tv_entity": "Connected TV / display media player"
+          "stb_model": "STB model",
+          "tv_entity": "Connected TV / display media player",
+          "power_switch": "Optional STB power helper switch"
         }
       },
       "source": {
