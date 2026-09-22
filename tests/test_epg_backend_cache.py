@@ -46,6 +46,9 @@ class BackendCacheTests(unittest.IsolatedAsyncioTestCase):
                        'start': (self.now+timedelta(hours=1)).isoformat(),
                        'stop': (self.now+timedelta(hours=2)).isoformat()}
         self.fetches = 0
+        # The current EPG combines all configured XMLTV sources per refresh;
+        # the old single-provider count no longer represents one refresh.
+        self.requests_per_refresh = len(epg.GUIDE_SOURCES)
         hass = SimpleNamespace(async_create_task=lambda coro: asyncio.create_task(coro))
         self.view = manager.TotalplayCachedGuideView(hass)
         async def download(_url):
@@ -68,19 +71,24 @@ class BackendCacheTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(EVENTS[0]['minute'], [0, 30], 'Use :00 and :30, not rolling interval')
         self.assertEqual(EVENTS[0]['second'], 0, 'Start at the beginning of the minute')
         await self.view._startup_task
-        self.assertEqual(self.fetches, 1, 'Home Assistant preloads without an API request')
+        self.assertEqual(self.fetches, self.requests_per_refresh,
+                         'Home Assistant preloads every configured provider once')
         response = await self.view.get(SimpleNamespace(query={}))
-        self.assertEqual(self.fetches, 1, 'An ordinary card receives the prepared cache')
+        self.assertEqual(self.fetches, self.requests_per_refresh,
+                         'An ordinary card receives the prepared cache without downloads')
         guide = response['channels'][0]['schedule']
         self.assertEqual([p['title'] for p in guide], ['Current show', 'Upcoming show'])
         self.assertEqual(response['window_programme_count'], 2)
         self.view._next_refresh = 0
         await self.view.get(SimpleNamespace(query={}))
-        self.assertEqual(self.fetches, 1, 'Opening a card does not trigger XMLTV fetches')
+        self.assertEqual(self.fetches, self.requests_per_refresh,
+                         'Opening a card does not trigger XMLTV fetches')
         await EVENTS[0]['callback'](None)
-        self.assertEqual(self.fetches, 2, 'Clock-aligned callback refreshes schedule')
+        self.assertEqual(self.fetches, 2 * self.requests_per_refresh,
+                         'Clock-aligned callback refreshes every source once')
         await self.view.get(SimpleNamespace(query={'refresh':'1'}))
-        self.assertEqual(self.fetches, 3, 'Explicit Refresh guide bypasses the timer')
+        self.assertEqual(self.fetches, 3 * self.requests_per_refresh,
+                         'Explicit Refresh guide bypasses timer and refreshes each source once')
         self.view.async_stop()
         self.assertTrue(EVENTS[0]['cancelled'], 'Unloading last entry cancels scheduled fetches')
 
