@@ -20,41 +20,29 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up decoder entities and pre-warm a single authenticated EPG cache."""
     domain_data = hass.data.setdefault(DOMAIN, {})
     if not domain_data.get("card_registered"):
-        # Preserve the public URL and card type so existing Lovelace settings
-        # and the visual editor continue to work across frontend updates.
+        # Keep the public URL and card type stable for existing dashboards.
+        # Register EVERY bundled JS module, not a hand-maintained subset: an
+        # omitted import prevents the browser from registering the custom card.
         www = Path(__file__).parent / "www"
         await hass.http.async_register_static_paths(
             [
-                StaticPathConfig(_CARD_URL, str(www / "totalplay-stb-v0332.js"), False),
-                StaticPathConfig("/totalplay_stb/totalplay-stb-v0332.js", str(www / "totalplay-stb-v0332.js"), False),
-                StaticPathConfig("/totalplay_stb/totalplay-stb-v0331.js", str(www / "totalplay-stb-v0331.js"), False),
-                StaticPathConfig("/totalplay_stb/totalplay-stb-v0330.js", str(www / "totalplay-stb-v0330.js"), False),
-                StaticPathConfig("/totalplay_stb/totalplay-stb-v0328.js", str(www / "totalplay-stb-v0328.js"), False),
-                StaticPathConfig("/totalplay_stb/totalplay-epg-mapping.js", str(www / "totalplay-epg-mapping.js"), False),
-                StaticPathConfig("/totalplay_stb/totalplay-stb-v0325.js", str(www / "totalplay-stb-v0325.js"), False),
-                StaticPathConfig("/totalplay_stb/totalplay-stb-v0324-responsive.js", str(www / "totalplay-stb-v0324-responsive.js"), False),
-                StaticPathConfig("/totalplay_stb/totalplay-stb-v0324.js", str(www / "totalplay-stb-v0324.js"), False),
-                StaticPathConfig("/totalplay_stb/totalplay-stb-v0323.js", str(www / "totalplay-stb-v0323.js"), False),
-                StaticPathConfig("/totalplay_stb/totalplay-stb-v0323-status.js", str(www / "totalplay-stb-v0323-status.js"), False),
-                StaticPathConfig("/totalplay_stb/totalplay-stb-v0322.js", str(www / "totalplay-stb-v0322.js"), False),
-                StaticPathConfig("/totalplay_stb/totalplay-stb-v0321.js", str(www / "totalplay-stb-v0321.js"), False),
-                StaticPathConfig("/totalplay_stb/totalplay-stb-v0320.js", str(www / "totalplay-stb-v0320.js"), False),
-                StaticPathConfig("/totalplay_stb/premium-catalog.zlib.txt", str(www / "premium-catalog.zlib.txt"), False),
-                StaticPathConfig("/totalplay_stb/totalplay-stb-v0319.js", str(www / "totalplay-stb-v0319.js"), False),
-                StaticPathConfig("/totalplay_stb/totalplay-stb-v0318.js", str(www / "totalplay-stb-v0318.js"), False),
-                StaticPathConfig("/totalplay_stb/totalplay-stb-v0317.js", str(www / "totalplay-stb-v0317.js"), False),
-                StaticPathConfig("/totalplay_stb/totalplay-stb-v0316.js", str(www / "totalplay-stb-v0316.js"), False),
-                StaticPathConfig("/totalplay_stb/totalplay-stb-v0315.js", str(www / "totalplay-stb-v0315.js"), False),
-                StaticPathConfig("/totalplay_stb/totalplay-stb-v0313.js", str(www / "totalplay-stb-v0313.js"), False),
-                StaticPathConfig("/totalplay_stb/totalplay-stb-v0311.js", str(www / "totalplay-stb-v0311.js"), False),
-                StaticPathConfig("/totalplay_stb/totalplay-stb-v0310.js", str(www / "totalplay-stb-v0310.js"), False),
-                StaticPathConfig("/totalplay_stb/totalplay-stb-v038.js", str(www / "totalplay-stb-v038.js"), False),
-                StaticPathConfig("/totalplay_stb/totalplay-app-logos.js", str(www / "totalplay-app-logos.js"), False),
-                StaticPathConfig("/totalplay_stb/totalplay-guide-layout-v036.js", str(www / "totalplay-guide-layout-v036.js"), False),
-                StaticPathConfig("/totalplay_stb/totalplay-pages-remote.js", str(www / "totalplay-pages-remote.js"), False),
-                StaticPathConfig("/totalplay_stb/totalplay-epg-responsive.js", str(www / "totalplay-epg-responsive.js"), False),
-                StaticPathConfig("/totalplay_stb/totalplay-guide-v3.js", str(www / "totalplay-guide-v3.js"), False),
-                StaticPathConfig("/totalplay_stb/lineup.txt", str(www / "lineup.txt"), False),
+                StaticPathConfig(
+                    _CARD_URL, str(www / "totalplay-stb-v0333.js"), False
+                ),
+                *(
+                    StaticPathConfig(
+                        f"/totalplay_stb/{module.name}", str(module), False
+                    )
+                    for module in sorted(www.glob("*.js"))
+                ),
+                StaticPathConfig(
+                    "/totalplay_stb/premium-catalog.zlib.txt",
+                    str(www / "premium-catalog.zlib.txt"),
+                    False,
+                ),
+                StaticPathConfig(
+                    "/totalplay_stb/lineup.txt", str(www / "lineup.txt"), False
+                ),
             ]
         )
         view = TotalplayCachedGuideView(hass)
