@@ -3,7 +3,7 @@
     "step": {
       "user": {
         "title": "Totalplay STB local remote",
-        "description": "Leave the IP blank to discover Totalplay decoders automatically. If you enter an IP, the integration verifies it with the same STB information endpoint used by discovery.",
+        "description": "Leave the IP blank to discover identifiable Totalplay decoders. For a manual IP, the integration attempts the same read-only identification; if it fails, you can still configure your known STB. Manual setup does not guarantee that remote commands work.",
         "data": {
           "host": "Decoder IP address (blank = discover)",
           "port": "HTTP port",
@@ -12,7 +12,7 @@
       },
       "discovered": {
         "title": "Select Totalplay decoder",
-        "description": "More than one Totalplay decoder responded to the STB information probe.",
+        "description": "More than one identifiable Totalplay decoder was found.",
         "data": {
           "host": "Detected decoder"
         }
@@ -37,8 +37,8 @@
       "cannot_connect": "Could not reach this IP address and port",
       "invalid_host": "Enter a private IPv4 address",
       "invalid_source": "Select a non-empty TV input",
-      "no_stb_found": "No Totalplay decoder responded on the detected local networks",
-      "not_totalplay_stb": "The address is reachable, but it did not respond as a Totalplay STB"
+      "no_stb_found": "No identifiable Totalplay decoder responded on the detected local networks. Enter your STB's IP manually to continue.",
+      "not_totalplay_stb": "This address could not be identified automatically. Manual setup is still available."
     },
     "abort": {
       "already_configured": "This decoder is already configured"

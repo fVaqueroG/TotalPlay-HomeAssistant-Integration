@@ -43,7 +43,7 @@ def _valid_private_ipv4(host: str) -> bool:
 
 
 class TotalplaySTBConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
-    """Set up a decoder by discovery or by manually probing the same API."""
+    """Discover devices, or accept a manually specified private IP as a fallback."""
 
     VERSION = 1
 
@@ -54,7 +54,12 @@ class TotalplaySTBConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         self._discovered: dict[str, TotalplaySTB] = {}
 
     async def async_step_user(self, user_input=None):
-        """Blank IP discovers STBs; a supplied IP uses the same getSTBInfo probe."""
+        """Use the same read-only probe for both auto-discovery and manual IPs.
+
+        A negative probe means 'unverified', NOT 'cannot be controlled'. An
+        explicitly provided private IP must remain configurable even if the
+        decoder's information API is blocked or responds unexpectedly.
+        """
         errors = {}
         if user_input is not None:
             host = (user_input.get(CONF_HOST) or "").strip()
@@ -66,7 +71,7 @@ class TotalplaySTBConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 if not found:
                     errors["base"] = "no_stb_found"
                 elif len(found) == 1:
-                    return await self._accept_probe(found[0], requested_model)
+                    return await self._accept_probe(found[0], requested_model, identified=True)
                 else:
                     self._discovered = {item.host: item for item in found}
                     return await self.async_step_discovered()
@@ -75,9 +80,12 @@ class TotalplaySTBConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             else:
                 found = await async_probe_stb(host, port)
                 if found is None:
-                    errors["base"] = "not_totalplay_stb"
-                else:
-                    return await self._accept_probe(found, requested_model)
+                    # Retain the user-supplied IP. No remote key is sent during
+                    # setup, and inability to fetch STB info cannot prove that
+                    # the remote-control endpoint is unsupported.
+                    found = TotalplaySTB(host=host, port=port)
+                    return await self._accept_probe(found, requested_model, identified=False)
+                return await self._accept_probe(found, requested_model, identified=True)
 
         return self.async_show_form(
             step_id="user",
@@ -90,10 +98,9 @@ class TotalplaySTBConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         )
 
     async def async_step_discovered(self, user_input=None):
-        """Let the user choose when more than one verified decoder is found."""
         if user_input is not None:
             host = user_input[CONF_HOST]
-            return await self._accept_probe(self._discovered[host], "")
+            return await self._accept_probe(self._discovered[host], "", identified=True)
 
         choices = {
             host: f"{device.model or UNKNOWN_MODEL} — {host}"
@@ -104,14 +111,20 @@ class TotalplaySTBConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             data_schema=vol.Schema({vol.Required(CONF_HOST): vol.In(choices)}),
         )
 
-    async def _accept_probe(self, found: TotalplaySTB, requested_model: str):
+    async def _accept_probe(self, found: TotalplaySTB, requested_model: str, *, identified: bool):
         model = requested_model or found.model or UNKNOWN_MODEL
         await self.async_set_unique_id(f"{found.host}:{found.port}")
-        self._abort_if_unique_id_configured(updates={CONF_MODEL: model})
+        # Do not overwrite the existing configured model with 'Unknown' when a
+        # re-add attempt cannot interrogate the STB information endpoint.
+        if requested_model or found.model:
+            self._abort_if_unique_id_configured(updates={CONF_MODEL: model})
+        else:
+            self._abort_if_unique_id_configured()
         self._decoder_data = {
             CONF_HOST: found.host,
             CONF_PORT: found.port,
             CONF_MODEL: model,
+            "stb_info_verified": identified,
         }
         return await self.async_step_display()
 
