@@ -2,56 +2,62 @@
   "config": {
     "step": {
       "user": {
-        "title": "Control local del decodificador Totalplay",
-        "description": "Configura la conexión local del decodificador. La televisión y la entrada HDMI se seleccionan después.",
+        "title": "Descubrir y conectar el decodificador Totalplay",
+        "description": "Introduce la IP para verificar directamente el decodificador o déjala vacía para buscar equipos en la red local. Si el decodificador está en otra subred, introduce esa subred (por ejemplo, 192.168.100.0/24). Una IP manual se verifica igual que un dispositivo descubierto. Permite una IP sin verificar solo si el endpoint de información no responde y ya sabes que el puerto de control funciona.",
         "data": {
-          "host": "Dirección IP del decodificador",
-          "port": "Puerto HTTP"
+          "host": "Dirección IP del decodificador (vacío = buscar)",
+          "port": "Puerto HTTP de control",
+          "stb_model": "Modelo del decodificador",
+          "discovery_network": "Subred de búsqueda opcional (CIDR)",
+          "allow_unverified": "Permitir IP manual si no se puede identificar el decodificador"
         }
+      },
+      "discovered": {
+        "title": "Selecciona tu decodificador Totalplay",
+        "description": "Selecciona un decodificador identificado mediante los endpoints locales de información de Totalplay.",
+        "data": {"discovered_host": "Decodificador detectado"}
       },
       "display": {
         "title": "Televisión conectada",
         "description": "Elige la televisión o reproductor al que está conectado el decodificador por HDMI. Deja el campo vacío si no está disponible en Home Assistant.",
         "data": {
-          "tv_entity": "Televisión / reproductor conectado"
+          "tv_entity": "Televisión / reproductor conectado",
+          "power_switch": "Apagador opcional del decodificador"
         }
       },
       "source": {
         "title": "Entrada de Totalplay en la televisión",
-        "description": "Elige la entrada HDMI del decodificador. Solo se cambiará la entrada si la televisión informa que actualmente está en otra.",
-        "data": {
-          "tv_source": "Entrada HDMI de la televisión"
-        }
+        "description": "Elige la entrada HDMI del decodificador. Solo se cambiará si la televisión informa que actualmente está en otra.",
+        "data": {"tv_source": "Entrada HDMI de la televisión"}
       }
     },
     "error": {
       "cannot_connect": "No se pudo conectar a esa dirección IP y puerto",
+      "cannot_identify": "No se identificó ningún decodificador Totalplay en esa IP y puerto. Revisa la dirección y el puerto o permite expresamente una IP manual sin verificar.",
+      "no_devices_found": "No se detectaron decodificadores Totalplay. Si está en otra subred, introduce su IP o una subred de búsqueda privada.",
       "invalid_host": "Introduce una dirección IPv4 privada",
+      "invalid_network": "Introduce una subred IPv4 privada CIDR de /24 o más pequeña",
       "invalid_source": "Selecciona una entrada de televisión válida"
     },
-    "abort": {
-      "already_configured": "Este decodificador ya está configurado"
-    }
+    "abort": {"already_configured": "Este decodificador ya está configurado"}
   },
   "options": {
     "step": {
       "init": {
-        "title": "Televisión conectada",
-        "description": "Elige la televisión o reproductor conectado al decodificador. Deja el campo vacío para desactivar la selección automática de entrada.",
+        "title": "Modelo del decodificador y televisión conectada",
+        "description": "Cambia el modelo del decodificador o los dispositivos vinculados sin borrar la integración. Se conservan la IP, las entidades y las demás opciones.",
         "data": {
-          "tv_entity": "Televisión / reproductor conectado"
+          "stb_model": "Modelo del decodificador",
+          "tv_entity": "Televisión / reproductor conectado",
+          "power_switch": "Apagador opcional del decodificador"
         }
       },
       "source": {
         "title": "Entrada de Totalplay en la televisión",
-        "description": "Elige la entrada HDMI del decodificador. La integración comprobará la entrada actual antes de cambiarla.",
-        "data": {
-          "tv_source": "Entrada HDMI de la televisión"
-        }
+        "description": "Elige la entrada HDMI del decodificador. La integración comprueba la entrada actual antes de cambiarla.",
+        "data": {"tv_source": "Entrada HDMI de la televisión"}
       }
     },
-    "error": {
-      "invalid_source": "Selecciona una entrada de televisión válida"
-    }
+    "error": {"invalid_source": "Selecciona una entrada de televisión válida"}
   }
 }
