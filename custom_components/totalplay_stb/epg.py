@@ -1,6 +1,6 @@
 """Authenticated Home Assistant proxy for public XMLTV programme listings.
 
-Combine independent live Mexico/Latino feeds without confusing XMLTV station IDs
+Combine independent Mexico/Latino feeds without confusing XMLTV station IDs
 with Totalplay channel numbers. Keep usable cached data when providers fail.
 """
 
@@ -21,17 +21,21 @@ _LOGGER = logging.getLogger(__name__)
 GUIDE_URL = "https://raw.githubusercontent.com/acidjesuz/EPGTalk/master/Latino_guide.xml.gz"
 BACKUP_GUIDE_URL = "https://epgshare01.online/epgshare01/epg_ripper_MX1.xml.gz"
 THIRD_GUIDE_URL = "https://iptv-epg.org/files/epg-mx.xml"
-# The old iptv-org hosted GatoTV and mi.tv URLs return 404: do not probe them.
-# A historical station ID is not sufficient to create a working programme feed.
-GUIDE_SOURCES = (GUIDE_URL, BACKUP_GUIDE_URL, THIRD_GUIDE_URL)
-SOURCE_NAMES = ("EPGTalk Latino / Mexico", "EPGshare Mexico MX1", "IPTV-EPG Mexico")
+# Retain the two optional iptv-org feeds even when they temporarily return 404.
+# A failed source never prevents using programme data from another provider.
+FOURTH_GUIDE_URL = "https://iptv-org.github.io/epg/guides/mx/gatotv.com.epg.xml"
+FIFTH_GUIDE_URL = "https://iptv-org.github.io/epg/guides/mx/mi.tv.epg.xml"
+GUIDE_SOURCES = (GUIDE_URL, BACKUP_GUIDE_URL, THIRD_GUIDE_URL,
+                 FOURTH_GUIDE_URL, FIFTH_GUIDE_URL)
+SOURCE_NAMES = ("EPGTalk Latino / Mexico", "EPGshare Mexico MX1", "IPTV-EPG Mexico",
+                "GatoTV Mexico (iptv-org)", "mi.tv Mexico (iptv-org)")
 MAX_EXPANDED_GUIDE_BYTES = MAX_STREAMED_XMLTV_BYTES
 _CACHE_SECONDS = 15 * 60
 _RETRY_SECONDS = 5 * 60
 _DOWNLOAD_CHUNK_BYTES = 128 * 1024
 _MAX_MERGED_STATIONS = 3000
-# The Latino guide can be >10 MB compressed; a 20-second total timeout is not
-# enough for slower HA hosts or provider CDNs. Bound both connection and stalls.
+# Large Latino guides and slower HA hosts can exceed the old 20-second limit.
+# Keep the total, connection and stalled-socket timeouts finite.
 _XMLTV_TIMEOUT = ClientTimeout(total=100, connect=15, sock_read=35)
 
 
