@@ -25,7 +25,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         www = Path(__file__).parent / "www"
         await hass.http.async_register_static_paths(
             [
-                StaticPathConfig(_CARD_URL, str(www / "totalplay-stb-v0318.js"), False),
+                StaticPathConfig(_CARD_URL, str(www / "totalplay-stb-v0319.js"), False),
+                StaticPathConfig("/totalplay_stb/totalplay-stb-v0318.js", str(www / "totalplay-stb-v0318.js"), False),
                 StaticPathConfig("/totalplay_stb/totalplay-stb-v0317.js", str(www / "totalplay-stb-v0317.js"), False),
                 StaticPathConfig("/totalplay_stb/totalplay-stb-v0316.js", str(www / "totalplay-stb-v0316.js"), False),
                 StaticPathConfig("/totalplay_stb/totalplay-stb-v0315.js", str(www / "totalplay-stb-v0315.js"), False),
@@ -54,7 +55,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     domain_data.setdefault("active_entries", set()).add(entry.entry_id)
-    # Only the first decoder starts the timer; subsequent config entries share it.
+    # Only the first decoder starts the clock-aligned refresh listener.
     domain_data["guide_view"].async_start()
     return True
 
