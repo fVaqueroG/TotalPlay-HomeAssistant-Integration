@@ -7,6 +7,7 @@ Other artwork retains its existing Home Assistant cache and fallback behavior.
 
 import asyncio
 import base64
+import binascii
 import hashlib
 import logging
 from pathlib import Path
@@ -42,10 +43,8 @@ def read_packaged_icon() -> bytes:
 
 def read_packaged_vertical() -> bytes:
     """Read the user's original white-lettered vertical logo, losslessly resized."""
-    return _validate_png(
-        base64.b64decode(_VERTICAL_ASSET.read_text(encoding="ascii"), validate=True),
-        _VERTICAL_SHA256,
-    )
+    encoded = "".join(_VERTICAL_ASSET.read_text(encoding="ascii").split())
+    return _validate_png(base64.b64decode(encoded, validate=True), _VERTICAL_SHA256)
 
 
 class TotalplayPackagedArtworkView(TotalplayArtworkView):
@@ -67,7 +66,7 @@ class TotalplayPackagedArtworkView(TotalplayArtworkView):
                         self._bundled_images[image_id] = (
                             await self._hass.async_add_executor_job(reader)
                         )
-                    except (OSError, ValueError, base64.binascii.Error):
+                    except (OSError, ValueError, binascii.Error):
                         _LOGGER.exception("Could not read packaged Totalplay %s logo", image_id)
                         return None
         return self._bundled_images[image_id]
