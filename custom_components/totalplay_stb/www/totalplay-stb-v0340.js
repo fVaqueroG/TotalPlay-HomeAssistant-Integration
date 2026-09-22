@@ -1,6 +1,7 @@
-/* v0.3.40: Keep the existing Totalplay guide and add popup sizing/icon controls. */
+/* v0.3.40: Keep existing Totalplay guide; add popup sizes, icons and button layouts. */
 import './totalplay-stb-v0339.js?v=0.3.40';
 import './totalplay-stb-popup-options.js?v=0.3.40';
+import './totalplay-stb-popup-layout.js?v=0.3.40';
 
 const TP_40_FULL = customElements.get('totalplay-stb-card');
 const TP_40_POPUP = customElements.get('totalplay-stb-popup-card');
