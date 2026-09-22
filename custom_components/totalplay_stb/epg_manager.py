@@ -1,14 +1,15 @@
 """Backend-managed, preloaded Totalplay guide with bounded rolling programme data."""
 
 import asyncio
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 import time
 
-from homeassistant.helpers.event import async_track_time_interval
+from homeassistant.helpers.event import async_track_time_change
 
 from .epg import TotalplayGuideView
 
-_REFRESH_INTERVAL = timedelta(minutes=30)
+# These are wall-clock boundaries, not 30 minutes after a startup/manual fetch.
+_CLOCK_REFRESH_MINUTES = (0, 30)
 
 
 class TotalplayCachedGuideView(TotalplayGuideView):
@@ -21,11 +22,12 @@ class TotalplayCachedGuideView(TotalplayGuideView):
         self._last_prune_minute = None
 
     def async_start(self) -> None:
-        """Start one refresh timer, and populate the cache before a card needs it."""
+        """Start one clock-aligned refresh listener and populate the cache."""
         if self._unsubscribe_refresh is not None:
             return
-        self._unsubscribe_refresh = async_track_time_interval(
-            self._hass, self._scheduled_refresh, _REFRESH_INTERVAL
+        self._unsubscribe_refresh = async_track_time_change(
+            self._hass, self._scheduled_refresh,
+            minute=list(_CLOCK_REFRESH_MINUTES), second=0,
         )
         self._startup_task = self._hass.async_create_task(self.async_refresh())
 
@@ -88,7 +90,7 @@ class TotalplayCachedGuideView(TotalplayGuideView):
             # An immediate visit during startup shares the one initial fetch.
             await asyncio.shield(self._startup_task)
         elif not self._guide.get("channels") and time.monotonic() >= self._next_refresh:
-            # Recover if the startup download failed before the first timer tick.
+            # Recover if the startup download failed before the first tick.
             await self.async_refresh()
         self._prune_ended()
         response = self.json(self._guide)
