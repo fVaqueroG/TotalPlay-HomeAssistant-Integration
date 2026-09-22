@@ -28,6 +28,7 @@ SOURCE_NAMES = ("EPGTalk Latino / Mexico", "EPGshare Mexico MX1", "IPTV-EPG Mexi
 MAX_EXPANDED_GUIDE_BYTES = MAX_STREAMED_XMLTV_BYTES
 _CACHE_SECONDS = 15 * 60
 _RETRY_SECONDS = 5 * 60
+_DOWNLOAD_CHUNK_BYTES = 128 * 1024
 
 
 def _error_description(exc: Exception) -> str:
@@ -80,16 +81,32 @@ class TotalplayGuideView(HomeAssistantView):
         return self.json(self._guide)
 
     async def _download(self, url: str) -> dict:
-        """Cap transfer size and parse work off the event loop."""
+        """Read until EOF with a hard transfer cap, then parse off the event loop.
+
+        StreamReader.read(n) may return *fewer* than n bytes without reaching
+        EOF. A single read of a gzip response can therefore return only its
+        first network chunk, making a valid XMLTV file look corrupt.
+        """
         session = async_get_clientsession(self._hass)
         async with session.get(url, timeout=ClientTimeout(total=20)) as response:
             response.raise_for_status()
             length = response.content_length
             if length is not None and length > MAX_GUIDE_BYTES:
                 raise ValueError("Guide exceeds the XMLTV download size limit")
-            raw = await response.content.read(MAX_GUIDE_BYTES + 1)
-            if len(raw) > MAX_GUIDE_BYTES:
-                raise ValueError("Guide exceeds the XMLTV download size limit")
+            chunks = []
+            downloaded = 0
+            while True:
+                # Read the extra byte to detect oversized responses even if
+                # the server omits Content-Length or uses chunked transfer.
+                remaining = MAX_GUIDE_BYTES + 1 - downloaded
+                chunk = await response.content.read(min(_DOWNLOAD_CHUNK_BYTES, remaining))
+                if not chunk:
+                    break
+                downloaded += len(chunk)
+                if downloaded > MAX_GUIDE_BYTES:
+                    raise ValueError("Guide exceeds the XMLTV download size limit")
+                chunks.append(chunk)
+            raw = b"".join(chunks)
         parsed = await self._hass.async_add_executor_job(_parse_guide_bytes, raw)
         if not parsed["channels"] or not parsed["programme_count"]:
             raise ValueError("Guide contains no usable channels or programmes")
