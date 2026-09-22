@@ -7,7 +7,8 @@ const root = path.join(__dirname, '../custom_components/totalplay_stb/www');
 const entry = fs.readFileSync(path.join(root, 'totalplay-stb-v0311.js'), 'utf8');
 const init = fs.readFileSync(path.join(root, '../__init__.py'), 'utf8');
 assert.match(entry, /totalplay-stb-v0310\.js\?v=0\.3\.11/);
-assert.match(init, /_CARD_URL, str\(www \/ "totalplay-stb-v0318\.js"\)/);
+assert.match(init, /_CARD_URL, str\(www \/ "totalplay-stb-v0319\.js"\)/);
+assert.match(init, /"\/totalplay_stb\/totalplay-stb-v0318\.js"/);
 assert.match(init, /"\/totalplay_stb\/totalplay-stb-v0317\.js"/);
 assert.match(init, /"\/totalplay_stb\/totalplay-stb-v0316\.js"/);
 assert.match(init, /"\/totalplay_stb\/totalplay-stb-v0315\.js"/);
@@ -57,7 +58,7 @@ const makeHass = state => ({states:{'media_player.totalplay':{attributes:{connec
   await card._togglePowerHelper(); assert.equal(card._hass.calls[0].action,'turn_off');
   card.hass=makeHass('unavailable');
   assert.equal(card._tpPowerButton.disabled,true);
-  await card._togglePowerHelper();assert.equal(card._hass.calls.length,0);
+  await card._togglePowerHelper(); assert.equal(card._hass.calls.length,0);
   const wrong=makeHass('off');wrong.states['media_player.totalplay'].attributes.tv_input_check='switch_unsupported';
   card.hass=wrong;assert.equal(card._tpInputWarning.hidden,false);
   assert.match(card._tpInputWarning.textContent,/cannot switch/);
