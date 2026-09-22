@@ -1,6 +1,7 @@
-"""Authenticated Home Assistant proxy for optional public XMLTV guide listings.
+"""Authenticated Home Assistant proxy for public XMLTV programme listings.
 
-Programme metadata only; decoder tuning is always local to Totalplay.
+Independent sources are combined to improve coverage without using an XMLTV
+channel ID as a Totalplay tuning number or replacing official channel branding.
 """
 
 import asyncio
@@ -17,9 +18,6 @@ from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from .epg_data import MAX_GUIDE_BYTES, MAX_STREAMED_XMLTV_BYTES, parse_xmltv, parse_xmltv_stream
 
 _LOGGER = logging.getLogger(__name__)
-# The GitHub-hosted Latino guide includes Mexican stations and publishes an
-# independently updated status page. Keep the other sources as alternatives;
-# they are not Totalplay's proprietary schedule or a package/channel mapping.
 GUIDE_URL = "https://raw.githubusercontent.com/acidjesuz/EPGTalk/master/Latino_guide.xml.gz"
 BACKUP_GUIDE_URL = "https://epgshare01.online/epgshare01/epg_ripper_MX1.xml.gz"
 THIRD_GUIDE_URL = "https://iptv-epg.org/files/epg-mx.xml"
@@ -29,10 +27,11 @@ MAX_EXPANDED_GUIDE_BYTES = MAX_STREAMED_XMLTV_BYTES
 _CACHE_SECONDS = 15 * 60
 _RETRY_SECONDS = 5 * 60
 _DOWNLOAD_CHUNK_BYTES = 128 * 1024
+_MAX_MERGED_STATIONS = 3000
 
 
 def _error_description(exc: Exception) -> str:
-    """Expose useful categories without leaking URLs or private connection data."""
+    """Expose useful categories without leaking provider URLs or private data."""
     if isinstance(exc, ClientResponseError):
         return f"HTTP {exc.status} from the XMLTV provider"
     if isinstance(exc, (asyncio.TimeoutError, TimeoutError)):
@@ -59,6 +58,65 @@ def _parse_guide_bytes(raw: bytes) -> dict:
     return parse_xmltv(raw)
 
 
+def _merge_guide_sources(successes: list[tuple[int, dict]]) -> dict:
+    """Preserve first-provider schedules per ID; supplement missing stations.
+
+    ID collisions with different station names are separately namespaced so a
+    foreign feed can never silently replace an existing manual EPG mapping.
+    Same-ID alternate names are retained, with later programmes used only when
+    the primary source supplies no current/upcoming programme for that station.
+    """
+    merged = {}
+    reports = []
+    for rank, parsed in successes:
+        reports.append({
+            "name": SOURCE_NAMES[rank],
+            "stations": len(parsed["channels"]),
+            "scheduled": parsed.get("scheduled_channel_count", 0),
+        })
+        for station in parsed["channels"]:
+            original_id = str(station.get("id", "")).strip()
+            if not original_id:
+                continue
+            names = list(dict.fromkeys(str(n).strip() for n in
+                [station.get("name"), *(station.get("names") or [])] if n))[:10]
+            if not names:
+                continue
+            identity = original_id
+            existing = merged.get(identity)
+            if existing and not ({n.casefold() for n in existing["names"]} &
+                                 {n.casefold() for n in names}):
+                identity = f"{original_id}~tp{rank + 1}"
+                existing = merged.get(identity)
+            if existing:
+                existing["names"] = list(dict.fromkeys(existing["names"] + names))[:10]
+                if not existing["schedule"] and station.get("schedule"):
+                    existing["schedule"] = list(station["schedule"])
+                    existing["programme_source"] = SOURCE_NAMES[rank]
+                continue
+            if len(merged) >= _MAX_MERGED_STATIONS:
+                raise ValueError("Combined XMLTV guide exceeds the station limit")
+            merged[identity] = {
+                "id": identity, "name": names[0], "names": names,
+                "logo": station.get("logo"),
+                "schedule": list(station.get("schedule") or []),
+                "source_rank": rank, "source_name": SOURCE_NAMES[rank],
+                "programme_source": SOURCE_NAMES[rank],
+            }
+    channels = list(merged.values())
+    first = successes[0][1]
+    return {
+        "updated": first.get("updated"), "channels": channels,
+        "programme_count": sum(p.get("programme_count", 0) for _, p in successes),
+        "valid_timestamp_count": sum(p.get("valid_timestamp_count", 0) for _, p in successes),
+        "window_programme_count": sum(len(s["schedule"]) for s in channels),
+        "scheduled_channel_count": sum(bool(s["schedule"]) for s in channels),
+        "sources": reports, "source_name": " + ".join(s["name"] for s in reports),
+        "source": GUIDE_SOURCES[successes[0][0]],
+        "fallback": successes[0][0] != 0,
+    }
+
+
 class TotalplayGuideView(HomeAssistantView):
     """Expose public programme data via an authenticated Home Assistant API."""
 
@@ -73,26 +131,18 @@ class TotalplayGuideView(HomeAssistantView):
         self._next_refresh = 0.0
 
     async def get(self, request: web.Request) -> web.Response:
-        """Share the cached guide and compress the large schedule response."""
         if time.monotonic() >= self._next_refresh:
             async with self._lock:
                 if time.monotonic() >= self._next_refresh:
                     await self._refresh()
         response = self.json(self._guide)
-        # aiohttp negotiates gzip/deflate with the browser. Compress the JSON
-        # response, not the downloaded XMLTV, so no schedule fields are lost.
         enable_compression = getattr(response, "enable_compression", None)
         if callable(enable_compression):
             enable_compression()
         return response
 
     async def _download(self, url: str) -> dict:
-        """Read until EOF with a hard transfer cap, then parse off the event loop.
-
-        StreamReader.read(n) may return *fewer* than n bytes without reaching
-        EOF. A single read of a gzip response can therefore return only its
-        first network chunk, making a valid XMLTV file look corrupt.
-        """
+        """Read until EOF, enforce transfer limits, parse off the event loop."""
         session = async_get_clientsession(self._hass)
         async with session.get(url, timeout=ClientTimeout(total=20)) as response:
             response.raise_for_status()
@@ -102,8 +152,6 @@ class TotalplayGuideView(HomeAssistantView):
             chunks = []
             downloaded = 0
             while True:
-                # Read the extra byte to detect oversized responses even if
-                # the server omits Content-Length or uses chunked transfer.
                 remaining = MAX_GUIDE_BYTES + 1 - downloaded
                 chunk = await response.content.read(min(_DOWNLOAD_CHUNK_BYTES, remaining))
                 if not chunk:
@@ -119,26 +167,40 @@ class TotalplayGuideView(HomeAssistantView):
         return parsed
 
     async def _refresh(self) -> None:
-        """Use the first current guide; keep cached data and report failed sources."""
+        """Load all independent sources, preserving cached data on total failure.
+
+        Download concurrently to avoid stacking three successive 20-second
+        provider timeouts during initial dashboard startup.
+        """
+        results = await asyncio.gather(
+            *(self._download(url) for url in GUIDE_SOURCES),
+            return_exceptions=True,
+        )
+        successes = []
         errors = []
-        for index, url in enumerate(GUIDE_SOURCES):
+        for rank, result in enumerate(results):
+            if isinstance(result, BaseException):
+                reason = _error_description(result)
+                _LOGGER.warning("Totalplay XMLTV provider %s unavailable: %s", rank + 1, reason)
+                errors.append(f"provider {rank + 1} ({SOURCE_NAMES[rank]}): {reason}")
+                continue
+            if not result.get("window_programme_count"):
+                errors.append(f"provider {rank + 1} ({SOURCE_NAMES[rank]}): no programmes in the current window")
+                continue
+            successes.append((rank, result))
+        if successes:
             try:
-                parsed = await self._download(url)
-                if not parsed.get("window_programme_count"):
-                    raise ValueError("No programmes in the current eight-hour window")
+                combined = _merge_guide_sources(successes)
                 self._guide = {
-                    **parsed, "error": None, "source": url,
-                    "source_name": SOURCE_NAMES[index], "fallback": index > 0,
-                    "source_errors": errors, "using_cached_guide": False,
+                    **combined, "error": None, "source_errors": errors,
+                    "using_cached_guide": False,
                 }
                 self._next_refresh = time.monotonic() + _CACHE_SECONDS
-                if index:
-                    _LOGGER.info("Totalplay EPG using alternative source %s", index + 1)
+                _LOGGER.info("Totalplay EPG combined %s source(s), %s stations with programmes",
+                             len(successes), combined["scheduled_channel_count"])
                 return
-            except Exception as exc:  # Optional guide never blocks decoder control.
-                reason = _error_description(exc)
-                _LOGGER.warning("Totalplay XMLTV provider %s unavailable: %s", index + 1, reason)
-                errors.append(f"provider {index + 1} ({SOURCE_NAMES[index]}): {reason}")
+            except ValueError as exc:
+                errors.append(_error_description(exc))
         self._guide = {
             **self._guide,
             "error": "EPG download failed (" + "; ".join(errors) + ")",
