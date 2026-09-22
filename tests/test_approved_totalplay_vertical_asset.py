@@ -12,7 +12,8 @@ EXPECTED_SHA256 = "75f0eaae881a5f40f14a5e3b22fff1d4d3d1c03384637b14a3e8c347c8aa8
 
 class ApprovedVerticalLogoTests(unittest.TestCase):
     def test_approved_white_lettered_logo_is_intact(self):
-        data = base64.b64decode(BUNDLE.read_text(encoding="ascii"), validate=True)
+        encoded = "".join(BUNDLE.read_text(encoding="ascii").split())
+        data = base64.b64decode(encoded, validate=True)
         self.assertEqual(hashlib.sha256(data).hexdigest(), EXPECTED_SHA256)
         self.assertGreater(len(data), 2500)  # Reject the earlier 1325-byte placeholder.
         self.assertEqual(data[:8], b"\x89PNG\r\n\x1a\n")
