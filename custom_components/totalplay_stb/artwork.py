@@ -24,11 +24,13 @@ _LOGGER = logging.getLogger(__name__)
 _ARTWORK_URL = "/totalplay_stb/artwork/{kind}/{image_id}"
 _BRAND_URL = "https://www.totalplay.com.mx/assetsv2/img/header/totalplay-logoWhite.svg"
 _VERTICAL_BRAND_URL = "https://upload.wikimedia.org/wikipedia/commons/b/bf/Logo_TotalPlay.svg"
+_ICON_BRAND_URL = "https://yt3.googleusercontent.com/ytc/AIdro_n3v9pBXNjsF96o5V5Gv3HTk1a3NgyNoWwLVYlJ_rdZy6k=s160-c-k-c0x00ffffff-no-rj"
 _CHANNEL_ROOT = "https://imgn.cdn.iutpcdn.com/IMGS/CHANNEL/"
 _TIMEOUT = ClientTimeout(total=30, connect=8, sock_read=15)
 _MAX_IMAGE_BYTES = 1_000_000
 _FAIL_RETRY_SECONDS = 20 * 60
 _PNG_SIGNATURE = b"\x89PNG\r\n\x1a\n"
+_JPEG_SIGNATURE = b"\xff\xd8\xff"
 _SVG_ELEMENTS = {"svg", "g", "path", "rect", "circle", "ellipse", "polygon", "polyline",
                  "line", "defs", "linearGradient", "radialGradient", "stop", "clipPath",
                  "mask", "title", "desc"}
@@ -53,7 +55,7 @@ def _catalog_ids(bundle: Path) -> dict[str, set[str]]:
     categories, rows = json.loads(decoded)
     if not isinstance(categories, list) or not isinstance(rows, list) or len(rows) != 313:
         raise ValueError("Invalid official Totalplay channel list")
-    image_ids = {"light": set(), "super": set(), "brand": {"totalplay", "vertical"}}
+    image_ids = {"light": set(), "super": set(), "brand": {"totalplay", "vertical", "icon"}}
     for row in rows:
         if not isinstance(row, list) or len(row) < 6 or row[3] not in {"C", "M", "I"}:
             raise ValueError("Invalid Totalplay artwork entry")
@@ -136,7 +138,7 @@ class TotalplayArtworkView(HomeAssistantView):
         await self._prepare()
         if image_id not in self._allowed.get(kind, set()):
             return None
-        suffix = ".svg" if kind == "brand" else ".png"
+        suffix = ".img" if kind == "brand" and image_id == "icon" else (".svg" if kind == "brand" else ".png")
         filename = f"{kind}-{image_id}{suffix}"
         path = self._cache / filename
         cached = await self._hass.async_add_executor_job(_read_cached, path)
@@ -149,7 +151,8 @@ class TotalplayArtworkView(HomeAssistantView):
                 return cached
             if self._failed_until.get(filename, 0) > time.monotonic():
                 return None
-            source = ((_VERTICAL_BRAND_URL if image_id == "vertical" else _BRAND_URL)
+            source = ((_ICON_BRAND_URL if image_id == "icon" else
+                       _VERTICAL_BRAND_URL if image_id == "vertical" else _BRAND_URL)
                       if kind == "brand" else
                       f"{_CHANNEL_ROOT}{'SUPER_LIGHT' if kind == 'light' else 'SUPER'}/{image_id}-8c.png")
             try:
@@ -162,8 +165,14 @@ class TotalplayArtworkView(HomeAssistantView):
                         raw = await response.content.read(_MAX_IMAGE_BYTES + 1)
                 if not raw or len(raw) > _MAX_IMAGE_BYTES:
                     raise ValueError("Invalid image size")
-                if kind == "brand":
+                if kind == "brand" and image_id != "icon":
                     raw = await self._hass.async_add_executor_job(_clean_svg, raw)
+                elif kind == "brand" and image_id == "icon":
+                    is_png = raw.startswith(_PNG_SIGNATURE) and raw[12:16] == b"IHDR"
+                    is_jpeg = raw.startswith(_JPEG_SIGNATURE)
+                    is_webp = raw.startswith(b"RIFF") and raw[8:12] == b"WEBP"
+                    if not (is_png or is_jpeg or is_webp):
+                        raise ValueError("Expected a raster Totalplay icon")
                 elif not raw.startswith(_PNG_SIGNATURE) or raw[12:16] != b"IHDR":
                     raise ValueError("Expected an official PNG image")
                 await self._hass.async_add_executor_job(_write_cached, path, raw)
@@ -176,15 +185,21 @@ class TotalplayArtworkView(HomeAssistantView):
 
     async def get(self, request: web.Request, kind: str, image_id: str) -> web.Response:
         if kind not in {"light", "super", "brand"} or not re.fullmatch(
-            r"[0-9]{1,8}" if kind != "brand" else r"(?:totalplay|vertical)", image_id
+            r"[0-9]{1,8}" if kind != "brand" else r"(?:totalplay|vertical|icon)", image_id
         ):
             raise web.HTTPNotFound()
         raw = await self._image(kind, image_id)
         if raw is None:
             raise web.HTTPNotFound()
+        if kind == "brand" and image_id == "icon":
+            content_type = ("image/png" if raw.startswith(_PNG_SIGNATURE) else
+                            "image/webp" if raw.startswith(b"RIFF") and raw[8:12] == b"WEBP" else
+                            "image/jpeg")
+        else:
+            content_type = "image/svg+xml" if kind == "brand" else "image/png"
         return web.Response(
             body=raw,
-            content_type="image/svg+xml" if kind == "brand" else "image/png",
+            content_type=content_type,
             headers={"Cache-Control": "public, max-age=86400", "X-Content-Type-Options": "nosniff"},
         )
 
@@ -202,7 +217,7 @@ class TotalplayArtworkView(HomeAssistantView):
             await self._prepare()
             # Preload all official channel and app primary artwork once. The
             # SUPER fallback is fetched only when a displayed image needs it.
-            targets = [("brand", "totalplay"), ("brand", "vertical"),
+            targets = [("brand", "totalplay"), ("brand", "vertical"), ("brand", "icon"),
                        *[("light", value) for value in
                        sorted(self._allowed["light"], key=int)]]
             completed = await asyncio.gather(
