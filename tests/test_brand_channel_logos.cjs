@@ -23,14 +23,18 @@ class Node {
 }
 class Card {
   _channels(){return this._config.channels||[];}
-  _renderGuide(){this.renders=(this.renders||0)+1;}
+  _renderGuide(){
+    // The actual guide replaces its rows on every render; simulate that here.
+    this.renders=(this.renders||0)+1;
+    const row=new Node('div','grow');row.append(new Node('span','ch-num','5'),new Node('span','ch-logo','CA'));
+    this._rows.children=[row];
+  }
   setConfig(config){
     this._config=config;this.shadowRoot=new Node('shadow');
     const brand=new Node('div','brand');brand.appendChild(new Node('div','mark','▶'));
     this.shadowRoot.append(brand,new Node('span','tp-version-badge','old'));
     this._remotePortal={shadowRoot:new Node('shadow')};
-    const row=new Node('div','grow');row.append(new Node('span','ch-num','5'),new Node('span','ch-logo','CA'));
-    this._rows={children:[row]};
+    this._rows={children:[]};
   }
 }
 class Editor {_draw(){this.shadowRoot=new Node('shadow');}}
