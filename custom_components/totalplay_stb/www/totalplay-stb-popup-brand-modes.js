@@ -6,7 +6,8 @@ const TP42_POPUP = customElements.get('totalplay-stb-popup-card');
 const TP42_EDITOR = customElements.get('totalplay-stb-popup-card-editor');
 if (!TP42_POPUP || !TP42_EDITOR) throw new Error('Totalplay popup components unavailable');
 
-const TP42_LOGO = 'https://www.totalplay.com.mx/assetsv2/img/header/totalplay-logoWhite.svg';
+const TP42_LOGO = '/totalplay_stb_cache/brand/totalplay-horizontal.svg';
+const TP42_LOGO_REMOTE = 'https://www.totalplay.com.mx/assetsv2/img/header/totalplay-logoWhite.svg';
 const TP42_DEFAULT_ICON = 'mdi:television-play';
 const tp42Icon = value => /^(?:mdi|hass|hacs):[a-z0-9][a-z0-9-]*$/i.test(String(value || '').trim())
   ? String(value).trim() : TP42_DEFAULT_ICON;
@@ -23,13 +24,19 @@ const tp42LogoImage = () => {
   image.alt = '';
   image.decoding = 'async';
   image.src = TP42_LOGO;
+  let fallbackTried = false;
   image.addEventListener('error', () => {
     if (!image.isConnected) return;
+    if (!fallbackTried) {
+      fallbackTried = true;
+      image.src = TP42_LOGO_REMOTE;
+      return;
+    }
     const fallback = document.createElement('span');
     fallback.className = 'tp42-wordmark-fallback';
     fallback.textContent = 'totalplay';
     image.replaceWith(fallback);
-  }, {once:true});
+  });
   return image;
 };
 const TP42_CSS = `
