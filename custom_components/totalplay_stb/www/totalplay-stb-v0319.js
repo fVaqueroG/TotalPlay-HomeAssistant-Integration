@@ -18,8 +18,7 @@ const TP_REFERENCE_ADDITIONS = Object.freeze([
   ['144','Canal Once','National'],['164','Ingenio TV','National'],
   ['166','Aprende TV','National'],
 ]);
-const TP_TOTALPLAY_LOGO = '/totalplay_stb_cache/brand/totalplay-horizontal.svg';
-const TP_TOTALPLAY_LOGO_REMOTE = 'https://www.totalplay.com.mx/assetsv2/img/header/totalplay-logoWhite.svg';
+const TP_TOTALPLAY_LOGO = 'https://www.totalplay.com.mx/assetsv2/img/header/totalplay-logoWhite.svg';
 const TP_BRAND_CSS = `
 :host {--tp-blue:#ed4a86;--tp-ink:#f6f4fb;--tp-sub:#b9b5c8;--tp-bg:#1e1e28;--tp-line:#484257}
 ha-card {background:#1e1e28!important;border:1px solid #494055;border-radius:19px!important;color:var(--tp-ink)}
@@ -128,15 +127,7 @@ TP_BRAND_CARD.prototype.setConfig = function(config) {
     logo.alt = 'Totalplay';
     logo.loading = 'eager';
     logo.addEventListener('load',()=>{mark.style.display='none';},{once:true});
-    let brandFallbackTried = false;
-    logo.addEventListener('error',()=>{
-      if (!brandFallbackTried) {
-        brandFallbackTried = true;
-        logo.src = TP_TOTALPLAY_LOGO_REMOTE;
-        return;
-      }
-      logo.remove();mark.style.display='grid';
-    });
+    logo.addEventListener('error',()=>{logo.remove();mark.style.display='grid';},{once:true});
     brand.insertBefore(logo,mark);
   }
   const remoteRoot=this._remotePortal?.shadowRoot;
