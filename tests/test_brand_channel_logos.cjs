@@ -13,10 +13,10 @@ class Node {
     this.children=[];this.handlers={};this.style={display:''};this.id='';
   }
   append(...nodes){for(const n of nodes)this.appendChild(n);}
-  appendChild(node){node.parentNode=this;this.children.push(node);return node;}
+  appendChild(node){if(typeof node==='string'){this.textContent+=node;return node;}node.parentNode=this;this.children.push(node);return node;}
   insertBefore(node,other){node.parentNode=this;const i=this.children.indexOf(other);this.children.splice(i<0?this.children.length:i,0,node);return node;}
   replaceChildren(...nodes){this.children=[];this.textContent='';this.append(...nodes);}
-  querySelector(selector){const wanted=selector.slice(1);const hit=this.children.find(n=>selector[0]==='#'?n.id===wanted:n.className?.split(' ').includes(wanted));return hit||this.children.map(n=>n.querySelector?.(selector)).find(Boolean)||null;}
+  querySelector(selector){const wanted=selector.slice(1);const hit=this.children.find(n=>selector[0]==='#'?n.id===wanted:selector[0]==='.'?n.className?.split(' ').includes(wanted):n.tagName===selector.toUpperCase());return hit||this.children.map(n=>n.querySelector?.(selector)).find(Boolean)||null;}
   addEventListener(event,handler){this.handlers[event]=handler;}
   remove(){if(this.parentNode)this.parentNode.children=this.parentNode.children.filter(n=>n!==this);}
   setAttribute(name,value){this[name]=value;}
@@ -49,7 +49,7 @@ const mark=card.shadowRoot.querySelector('.mark');
 logo.handlers.load();assert.equal(mark.style.display,'none');
 const stations=card._channels();
 assert.equal(stations.find(ch=>ch.number==='5').name,'Canal 5','Original channel is not replaced');
-assert.equal(stations.find(ch=>ch.number==='4').name,'N+ Foro','Verified omitted channel is available');
+assert.equal(stations.find(ch=>ch.number==='4').name,'N+ Foro','Reference omission is filled');
 assert.equal(stations.find(ch=>ch.number==='143').name,'Canal 22');
 assert.equal(card._channels(),stations,'Reference additions preserve cached channel array');
 card._renderGuide();
@@ -61,7 +61,7 @@ assert.equal(badge.textContent,'CA','Failed image restores channel initials');
 card.setConfig({lineup:true,channels:[{number:'5',name:'Canal 5',epg_id:'canal5.mx',logo_url:'https://example.org/override.svg'}]});
 card._renderGuide();
 assert.equal(card._rows.children[0].querySelector('img').src,'https://example.org/override.svg','Explicit image takes precedence');
-assert.ok(!card._channels().some(ch=>ch.number==='4')===false);
+assert.equal(card._channels().some(ch=>ch.number==='4'),true);
 const empty=new Card();empty.setConfig({lineup:false,channels:[]});
 assert.equal(empty._channels().length,0,'Custom-only cards do not receive reference numbers');
 console.log('PASS: Totalplay header, remote theme, EPG and manual channel logos, fallback, source additions, badge');
