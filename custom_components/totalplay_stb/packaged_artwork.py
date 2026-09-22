@@ -16,7 +16,7 @@ _BRAND_DIR = Path(__file__).parent / "www" / "brand"
 _ICON_ASSET = _BRAND_DIR / "totalplay-icon.png"
 _ICON_SHA256 = "fdef2be7c3db99b499bddd428dbebd6b8e39c0cfbd5288fd0ce9b8c5bd287f3c"
 _VERTICAL_ASSET = _BRAND_DIR / "totalplay-vertical-white.png"
-_VERTICAL_SHA256 = "9a040d841621eb71d8178fd000d700f85bc3ee7d38b51c28e69b811deb1477c3"
+_VERTICAL_SHA256 = "d364a2c51a2bcec2c9cd0f6354baeaa0b51b09fc52720f608f04ac5a9471122c"
 _PNG_SIGNATURE = b"\x89PNG\r\n\x1a\n"
 
 
