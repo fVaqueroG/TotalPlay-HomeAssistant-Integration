@@ -10,7 +10,6 @@ from homeassistant.core import HomeAssistant
 from .artwork import TotalplayArtworkView
 from .card_resource import async_register_card_resource
 from .const import DOMAIN
-from .artwork import TotalplayArtworkView
 from .epg_manager import TotalplayCachedGuideView
 
 _LOGGER = logging.getLogger(__name__)
@@ -21,11 +20,6 @@ _CARD_URL = "/totalplay_stb/totalplay-stb-card.js"
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up decoder entities, shared EPG and persistent artwork cache."""
     domain_data = hass.data.setdefault(DOMAIN, {})
-    artwork_view = domain_data.get("artwork_view")
-    if artwork_view is None:
-        artwork_view = TotalplayArtworkView(hass)
-        hass.http.register_view(artwork_view)
-        domain_data["artwork_view"] = artwork_view
 
     if not domain_data.get("card_registered"):
         # Keep the public URL and card type stable for existing dashboards.
@@ -34,7 +28,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         await hass.http.async_register_static_paths(
             [
                 StaticPathConfig(
-                    _CARD_URL, str(www / "totalplay-stb-v0343.js"), False
+                    _CARD_URL, str(www / "totalplay-stb-v0344.js"), False
                 ),
                 *(
                     StaticPathConfig(
@@ -74,7 +68,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
-    """Stop EPG and artwork preloading when no decoder entries remain."""
+    """Stop shared EPG/artwork tasks when no decoder entries remain."""
     unloaded = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
     if unloaded:
         domain_data = hass.data.get(DOMAIN, {})
