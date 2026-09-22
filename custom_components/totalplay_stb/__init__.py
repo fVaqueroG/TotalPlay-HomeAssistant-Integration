@@ -26,7 +26,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         await hass.http.async_register_static_paths(
             [
                 StaticPathConfig(
-                    _CARD_URL, str(www / "totalplay-stb-v0336.js"), False
+                    _CARD_URL, str(www / "totalplay-stb-v0337.js"), False
                 ),
                 *(
                     StaticPathConfig(
@@ -57,7 +57,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     domain_data.setdefault("active_entries", set()).add(entry.entry_id)
-    # Only the first decoder starts the clock-aligned refresh listener.
     domain_data["guide_view"].async_start()
     return True
 
