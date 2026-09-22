@@ -7,7 +7,7 @@ from homeassistant.components.http import StaticPathConfig
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 
-from .artwork import TotalplayArtworkView
+from .packaged_artwork import TotalplayPackagedArtworkView
 from .card_resource import async_register_card_resource
 from .const import DOMAIN
 from .epg_manager import TotalplayCachedGuideView
@@ -28,7 +28,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         await hass.http.async_register_static_paths(
             [
                 StaticPathConfig(
-                    _CARD_URL, str(www / "totalplay-stb-v0345.js"), False
+                    _CARD_URL, str(www / "totalplay-stb-v0346.js"), False
                 ),
                 *(
                     StaticPathConfig(
@@ -47,7 +47,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             ]
         )
         guide = TotalplayCachedGuideView(hass)
-        artwork = TotalplayArtworkView(hass)
+        artwork = TotalplayPackagedArtworkView(hass)
         hass.http.register_view(guide)
         hass.http.register_view(artwork)
         domain_data["guide_view"] = guide
