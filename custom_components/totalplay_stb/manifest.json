@@ -3,7 +3,7 @@
   "name": "Totalplay STB Local Remote",
   "codeowners": ["@fVaqueroG"],
   "config_flow": true,
-  "dependencies": ["frontend", "http", "lovelace"],
+  "dependencies": ["frontend", "http", "lovelace", "network"],
   "documentation": "https://github.com/fVaqueroG/TotalPlay-HomeAssistant-Integration#readme",
   "integration_type": "device",
   "iot_class": "assumed_state",
