@@ -1,0 +1,101 @@
+"""Test the backend-managed Totalplay guide without a real HA instance or internet."""
+import asyncio
+from datetime import datetime, timedelta, timezone
+import importlib.util
+from pathlib import Path
+import sys
+from types import ModuleType, SimpleNamespace
+import unittest
+from unittest.mock import patch
+
+from test_epg_fallback import epg, pkg, ha, helpers
+
+EVENTS = []
+event = ModuleType('homeassistant.helpers.event')
+
+def schedule(_hass, callback, interval):
+    record = {'callback': callback, 'interval': interval, 'cancelled': False}
+    EVENTS.append(record)
+    def cancel():
+        record['cancelled'] = True
+    return cancel
+
+event.async_track_time_interval = schedule
+ROOT = Path(__file__).resolve().parents[1] / 'custom_components' / 'totalplay_stb'
+with patch.dict(sys.modules, {
+    'homeassistant': ha, 'homeassistant.helpers': helpers,
+    'homeassistant.helpers.event': event,
+    pkg.__name__ + '.epg': epg,
+}):
+    spec = importlib.util.spec_from_file_location(
+        pkg.__name__ + '.epg_manager', ROOT / 'epg_manager.py')
+    manager = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(manager)
+
+class BackendCacheTests(unittest.IsolatedAsyncioTestCase):
+    def setUp(self):
+        EVENTS.clear()
+        self.now = datetime.now(timezone.utc)
+        self.live = {'title': 'Current show',
+                     'start': (self.now-timedelta(minutes=15)).isoformat(),
+                     'stop': (self.now+timedelta(minutes=40)).isoformat()}
+        self.ended = {'title': 'Expired show',
+                      'start': (self.now-timedelta(hours=2)).isoformat(),
+                      'stop': (self.now-timedelta(minutes=1)).isoformat()}
+        self.future = {'title': 'Upcoming show',
+                       'start': (self.now+timedelta(hours=1)).isoformat(),
+                       'stop': (self.now+timedelta(hours=2)).isoformat()}
+        self.fetches = 0
+        hass = SimpleNamespace(async_create_task=lambda coro: asyncio.create_task(coro))
+        self.view = manager.TotalplayCachedGuideView(hass)
+        async def download(_url):
+            self.fetches += 1
+            return {
+                'channels': [{'id': 'Azteca.mx', 'name': 'Azteca Uno',
+                              'schedule': [dict(self.ended), dict(self.live), dict(self.future)]}],
+                'programme_count': 3, 'window_programme_count': 3,
+                'updated': self.now.isoformat(),
+            }
+        self.view._download = download
+
+    async def asyncTearDown(self):
+        self.view.async_stop()
+
+    async def test_preload_and_thirty_minute_refresh_are_independent_of_dashboard(self):
+        self.view.async_start()
+        self.view.async_start()
+        self.assertEqual(len(EVENTS), 1, 'Only one half-hour timer is registered')
+        self.assertEqual(EVENTS[0]['interval'], timedelta(minutes=30))
+        await self.view._startup_task
+        self.assertEqual(self.fetches, 1, 'Home Assistant preloads without an API request')
+        response = await self.view.get(SimpleNamespace(query={}))
+        self.assertEqual(self.fetches, 1, 'An ordinary card receives the prepared cache')
+        schedule = response['channels'][0]['schedule']
+        self.assertEqual([p['title'] for p in schedule], ['Current show', 'Upcoming show'])
+        self.assertEqual(response['window_programme_count'], 2)
+        # Even an expired old refresh deadline must not make a card download XMLTV.
+        self.view._next_refresh = 0
+        await self.view.get(SimpleNamespace(query={}))
+        self.assertEqual(self.fetches, 1)
+        await EVENTS[0]['callback'](None)
+        self.assertEqual(self.fetches, 2, 'Backend timer fetches the new schedule')
+        await self.view.get(SimpleNamespace(query={'refresh':'1'}))
+        self.assertEqual(self.fetches, 3, 'Explicit Refresh guide bypasses the timer')
+        self.view.async_stop()
+        self.assertTrue(EVENTS[0]['cancelled'], 'Unloading last entry cancels scheduled fetches')
+
+    async def test_failed_refresh_keeps_current_programmes(self):
+        self.view.async_start()
+        await self.view._startup_task
+        async def unavailable(_url):
+            raise TimeoutError('provider is not responding')
+        self.view._download = unavailable
+        await EVENTS[0]['callback'](None)
+        guide = await self.view.get(SimpleNamespace(query={}))
+        self.assertTrue(guide['using_cached_guide'])
+        self.assertIn('Current show', [p['title'] for p in guide['channels'][0]['schedule']])
+        self.assertNotIn('Expired show', [p['title'] for p in guide['channels'][0]['schedule']])
+        self.assertIn('EPG download failed', guide['error'])
+
+if __name__ == '__main__':
+    unittest.main()
