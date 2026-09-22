@@ -1,5 +1,8 @@
 """Authenticated Home Assistant proxy for public XMLTV programme listings.
 
+Additional Mexico-specific guide feeds may improve coverage; absent stations
+remain unmatched rather than receiving invented or unrelated programmes.
+
 Independent sources are combined to improve coverage without using an XMLTV
 channel ID as a Totalplay tuning number or replacing official channel branding.
 """
@@ -21,8 +24,14 @@ _LOGGER = logging.getLogger(__name__)
 GUIDE_URL = "https://raw.githubusercontent.com/acidjesuz/EPGTalk/master/Latino_guide.xml.gz"
 BACKUP_GUIDE_URL = "https://epgshare01.online/epgshare01/epg_ripper_MX1.xml.gz"
 THIRD_GUIDE_URL = "https://iptv-epg.org/files/epg-mx.xml"
-GUIDE_SOURCES = (GUIDE_URL, BACKUP_GUIDE_URL, THIRD_GUIDE_URL)
-SOURCE_NAMES = ("EPGTalk Latino / Mexico", "EPGshare Mexico MX1", "IPTV-EPG Mexico")
+# Independently published Mexico-focused XMLTV feeds; these are optional.
+# They supplement programme data only, never the official Totalplay lineup.
+FOURTH_GUIDE_URL = "https://iptv-org.github.io/epg/guides/mx/gatotv.com.epg.xml"
+FIFTH_GUIDE_URL = "https://iptv-org.github.io/epg/guides/mx/mi.tv.epg.xml"
+GUIDE_SOURCES = (GUIDE_URL, BACKUP_GUIDE_URL, THIRD_GUIDE_URL,
+                 FOURTH_GUIDE_URL, FIFTH_GUIDE_URL)
+SOURCE_NAMES = ("EPGTalk Latino / Mexico", "EPGshare Mexico MX1", "IPTV-EPG Mexico",
+                "GatoTV Mexico (iptv-org)", "mi.tv Mexico (iptv-org)")
 MAX_EXPANDED_GUIDE_BYTES = MAX_STREAMED_XMLTV_BYTES
 _CACHE_SECONDS = 15 * 60
 _RETRY_SECONDS = 5 * 60
@@ -169,7 +178,7 @@ class TotalplayGuideView(HomeAssistantView):
     async def _refresh(self) -> None:
         """Load all independent sources, preserving cached data on total failure.
 
-        Download concurrently to avoid stacking three successive 20-second
+        Download concurrently to avoid stacking successive 20-second
         provider timeouts during initial dashboard startup.
         """
         results = await asyncio.gather(
