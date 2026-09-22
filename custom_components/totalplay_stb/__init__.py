@@ -25,7 +25,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         www = Path(__file__).parent / "www"
         await hass.http.async_register_static_paths(
             [
-                StaticPathConfig(_CARD_URL, str(www / "totalplay-stb-v0330.js"), False),\n                StaticPathConfig("/totalplay_stb/totalplay-stb-v0330.js", str(www / "totalplay-stb-v0330.js"), False),
+                StaticPathConfig(_CARD_URL, str(www / "totalplay-stb-v0331.js"), False),
+                StaticPathConfig("/totalplay_stb/totalplay-stb-v0331.js", str(www / "totalplay-stb-v0331.js"), False),
+                StaticPathConfig("/totalplay_stb/totalplay-stb-v0330.js", str(www / "totalplay-stb-v0330.js"), False),
                 StaticPathConfig("/totalplay_stb/totalplay-stb-v0328.js", str(www / "totalplay-stb-v0328.js"), False),
                 StaticPathConfig("/totalplay_stb/totalplay-epg-mapping.js", str(www / "totalplay-epg-mapping.js"), False),
                 StaticPathConfig("/totalplay_stb/totalplay-stb-v0325.js", str(www / "totalplay-stb-v0325.js"), False),
