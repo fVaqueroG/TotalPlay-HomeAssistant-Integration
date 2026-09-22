@@ -1,6 +1,6 @@
 /* Use Home Assistant's persistent artwork cache for the full guide, apps,
- * official channel icons and both popup logo modes. The original provider URLs
- * are retained strictly as an image fallback when the local cache is missing.
+ * official channel icons and both popup logo modes. Retain original provider
+ * URLs only as an image fallback if a local cache request cannot succeed.
  */
 const TP_ART_CARD = customElements.get('totalplay-stb-card');
 const TP_ART_POPUP = customElements.get('totalplay-stb-popup-card');
@@ -28,7 +28,7 @@ const tpArtLocalizeCatalog = card => {
 };
 
 // The inherited _loadLineup calls _renderGuide and _renderApps immediately
-// after setting the catalog. Localize the IDs BEFORE those DOM renderers run.
+// after setting the catalog. Localize IDs BEFORE those DOM renderers run.
 const tpArtPriorGuide = TP_ART_CARD.prototype._renderGuide;
 TP_ART_CARD.prototype._renderGuide = function (...args) {
   tpArtLocalizeCatalog(this);
@@ -79,36 +79,47 @@ TP_ART_CARD.prototype._renderApps = function (...args) {
   return result;
 };
 
-// Replace the pre-existing remote brand src immediately, within the same
-// synchronous setConfig call. A missing local logo falls back to the original.
+// The old logo modules install an error handler that removes the logo. Clone
+// their images synchronously to replace that handler before the local request
+// can fail; fall back to the original official logo URL when needed.
+const tpArtSwitchBrand = (brand, mark) => {
+  if (!brand) return;
+  const remote = brand.src;
+  const image = brand.cloneNode(false);
+  let triedRemote = false;
+  image.addEventListener('load', () => {
+    if (mark) mark.style.display = 'none';
+  });
+  image.addEventListener('error', () => {
+    if (!image.isConnected) return;
+    if (!triedRemote && remote !== TP_ART_BRAND) {
+      triedRemote = true;
+      image.src = remote;
+      return;
+    }
+    if (mark) {
+      mark.style.display = 'grid';
+      image.remove();
+    } else {
+      const fallback = document.createElement('span');
+      fallback.textContent = 'Totalplay';
+      fallback.className = 'tp42-wordmark-fallback';
+      image.replaceWith(fallback);
+    }
+  });
+  brand.replaceWith(image);
+  image.src = TP_ART_BRAND;
+};
+
 const tpArtPriorConfig = TP_ART_CARD.prototype.setConfig;
 TP_ART_CARD.prototype.setConfig = function (config) {
   tpArtPriorConfig.call(this, config);
-  const brand = this.shadowRoot?.querySelector('img.tp-brand-logo');
-  if (brand) {
-    const remote = brand.src;
-    brand.addEventListener('error', () => {
-      if (brand.isConnected && !brand.dataset.tpRemoteFallback) {
-        brand.dataset.tpRemoteFallback = '1';
-        brand.src = remote;
-      }
-    });
-    brand.src = TP_ART_BRAND;
-  }
+  const root = this.shadowRoot;
+  tpArtSwitchBrand(root?.querySelector('img.tp-brand-logo'), root?.querySelector('.header .mark'));
 };
 
 const tpArtPriorPopupConfig = TP_ART_POPUP.prototype.setConfig;
 TP_ART_POPUP.prototype.setConfig = function (config) {
   tpArtPriorPopupConfig.call(this, config);
-  const root = this.shadowRoot;
-  const brand = root?.querySelector('img.tp42-logo, img.tp-p-logo');
-  if (!brand) return;
-  const remote = brand.src;
-  brand.addEventListener('error', () => {
-    if (brand.isConnected && !brand.dataset.tpRemoteFallback) {
-      brand.dataset.tpRemoteFallback = '1';
-      brand.src = remote;
-    }
-  });
-  brand.src = TP_ART_BRAND;
+  tpArtSwitchBrand(this.shadowRoot?.querySelector('img.tp42-logo, img.tp-p-logo'));
 };
