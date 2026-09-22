@@ -1,4 +1,4 @@
-"""Remote platform for the DIW362's local HTTP KeyHandling endpoint."""
+"""Remote platform for the Totalplay local HTTP KeyHandling endpoint."""
 
 import asyncio
 from collections.abc import Iterable
@@ -19,6 +19,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from .const import DOMAIN, normalize_key
 from .display import async_ensure_display_source
 from .http import async_send_key
+from .stb import device_details
 
 
 async def async_setup_entry(
@@ -42,15 +43,9 @@ class TotalplayRemote(RemoteEntity):
         self._hass = hass
         self._host = entry.data[CONF_HOST]
         self._port = entry.data[CONF_PORT]
-        # Preserve entity registry IDs when updating from v0.2.0.
+        # Preserve entity registry IDs when changing models/reconfiguring.
         self._attr_unique_id = f"{DOMAIN}_{self._host}_{self._port}_remote"
-        self._attr_device_info = {
-            "identifiers": {(DOMAIN, f"{self._host}:{self._port}")},
-            "name": "Totalplay DIW362 UHD",
-            "manufacturer": "Sagemcom / Totalplay",
-            "model": "DIW362 UHD",
-            "configuration_url": f"http://{self._host}:{self._port}",
-        }
+        self._attr_device_info = device_details(entry)
 
     async def async_turn_on(self, **kwargs: Any) -> None:
         """A power toggle cannot guarantee a discrete ON command."""
@@ -87,8 +82,6 @@ class TotalplayRemote(RemoteEntity):
                 "Invalid repeats/delay, or hold_secs is unsupported by this API"
             )
 
-        # The UI can also send remote.send_command directly, not just
-        # media_player.play_media; check the configured input for that path too.
         if self._hass is not None:
             await async_ensure_display_source(self._hass, self._entry)
         sequence = keys * repeat
