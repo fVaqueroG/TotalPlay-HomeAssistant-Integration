@@ -45,7 +45,7 @@ def _valid_private_ipv4(host: str) -> bool:
 class TotalplaySTBConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     """Set up a decoder by discovery or by manually probing the same API."""
 
-    VERSION = 2
+    VERSION = 1
 
     def __init__(self) -> None:
         self._decoder_data: dict = {}
