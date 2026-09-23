@@ -97,8 +97,10 @@ TP_OPTIONS_POPUP.prototype._openPopup = function () {
 class TotalplayStbPopupEditor extends HTMLElement {
   constructor() {super();this.attachShadow({mode:'open'});}
   setConfig(config) {
-    this._config = {...config};
-    this._draw();
+    const next={...config};
+    const changed=JSON.stringify(this._config)!==JSON.stringify(next);
+    this._config=next;
+    if(!this._drawn||(changed&&!this.matches(':focus-within')))this._draw();
   }
   set hass(hass) {
     this._hass = hass;
@@ -124,6 +126,8 @@ class TotalplayStbPopupEditor extends HTMLElement {
     return wrap;
   }
   _draw() {
+    if(this._drawn&&this.matches(':focus-within'))return;
+    this._drawn=true;
     const root = this.shadowRoot;
     root.replaceChildren();
     const style = document.createElement('style');
