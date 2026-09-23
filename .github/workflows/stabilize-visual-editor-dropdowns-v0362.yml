@@ -1,0 +1,91 @@
+name: Stabilize Totalplay visual editor dropdowns v0.3.62
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/stabilize-visual-editor-dropdowns-v0362.yml']
+permissions:
+  contents: write
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Stop recreating visual editor selects on every HA state update
+        run: |
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          root=Path('custom_components/totalplay_stb')
+          main=root/'www/totalplay-stb-card.js'
+          popup=root/'www/totalplay-stb-popup-options.js'
+          s=main.read_text()
+          p=popup.read_text()
+          def once(source,old,new,name):
+              assert source.count(old)==1,(name,source.count(old))
+              return source.replace(old,new,1)
+          s=once(s,''' setConfig(config){this._config={...TP_DEFAULT,...config,channels:[...(config.channels||[])],apps:[...(config.apps||TP_DEFAULT.apps)]};if(!this.shadowRoot)this.attachShadow({mode:'open'});this._draw();}
+ set hass(hass){this._hass=hass;this._draw();this._loadGuideOptions();}''',''' setConfig(config){
+   const next={...TP_DEFAULT,...config,channels:[...(config.channels||[])],apps:[...(config.apps||TP_DEFAULT.apps)]};
+   const changed=JSON.stringify(this._config)!==JSON.stringify(next);
+   this._config=next;
+   if(!this.shadowRoot)this.attachShadow({mode:'open'});
+   // HA echoes config-changed events; preserve the actual select DOM node
+   // during native dropdown scrolling or any active interaction.
+   if(!this._editorDrawn||(changed&&!this.matches(':focus-within')))this._draw();
+ }
+ set hass(hass){
+   const first=!this._hass;
+   this._hass=hass;
+   // Initial HA state is needed for decoder lists, but subsequent frequent
+   // state updates must never destroy an open select/menu.
+   if(first||!this._editorDrawn)this._draw();
+   this._loadGuideOptions();
+ }''','main editor setters')
+          s=once(s,''' _draw(){if(!this.shadowRoot||!this._config)return;const root=this.shadowRoot;root.replaceChildren();''',''' _draw(){if(!this.shadowRoot||!this._config)return;
+   if(this._editorDrawn&&this.matches(':focus-within'))return;
+   this._editorDrawn=true;
+   const root=this.shadowRoot;root.replaceChildren();''','editor redraw guard')
+          s=once(s,'''this._guideOptionsLoading=false;this._draw();}}
+}''','''this._guideOptionsLoading=false;
+   // Guide options can finish loading while the user is scrolling a dropdown.
+   if(!this.matches(':focus-within'))this._draw();}}
+}''','async guide options redraw')
+          p=once(p,'''  setConfig(config) {
+    this._config = {...config};
+    this._draw();
+  }''','''  setConfig(config) {
+    const next={...config};
+    const changed=JSON.stringify(this._config)!==JSON.stringify(next);
+    this._config=next;
+    // An echoed update must not replace the selected popup-option dropdown.
+    if(!this._drawn||(changed&&!this.matches(':focus-within')))this._draw();
+  }''','popup visual editor setter')
+          p=once(p,'''  _draw() {
+    const root = this.shadowRoot;
+    root.replaceChildren();''','''  _draw() {
+    if(this._drawn&&this.matches(':focus-within'))return;
+    this._drawn=true;
+    const root = this.shadowRoot;
+    root.replaceChildren();''','popup visual editor redraw guard')
+          manifest=root/'manifest.json'
+          meta=json.loads(manifest.read_text())
+          assert meta['version']=='0.3.61',meta['version']
+          meta['version']='0.3.62'
+          main.write_text(s)
+          popup.write_text(p)
+          manifest.write_text(json.dumps(meta,indent=2)+'\n')
+          print('PASS: Totalplay main and popup visual editor dropdowns stay mounted')
+          PY
+      - name: Validate JS and manifest
+        run: |
+          node --check custom_components/totalplay_stb/www/totalplay-stb-card.js
+          node --check custom_components/totalplay_stb/www/totalplay-stb-popup-options.js
+          python3 -m json.tool custom_components/totalplay_stb/manifest.json >/dev/null
+      - name: Commit and remove temporary workflow
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git rm .github/workflows/stabilize-visual-editor-dropdowns-v0362.yml
+          git add custom_components/totalplay_stb
+          git commit -m 'v0.3.62: keep visual editor dropdowns open during updates'
+          git push origin HEAD:main
