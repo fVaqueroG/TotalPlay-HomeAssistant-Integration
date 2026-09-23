@@ -23,11 +23,11 @@ jobs:
           const assert = require('node:assert/strict');
           const js = fs.readFileSync('custom_components/totalplay_stb/www/totalplay-stb-v0365.js','utf8');
           const init = fs.readFileSync('custom_components/totalplay_stb/__init__.py','utf8');
-          assert.match(js, /data-tp-palette=\\"dark\\"/);
-          assert.match(js, /data-tp-palette=\\"system\\"/);
-          assert.match(js, /--tp65-canvas:#151725/);
-          assert.match(js, /--tp65-canvas:var\\(--ha-card-background/);
-          assert.match(js, /tp65ApplyFull\\(popup\\._popupCard\\)/);
-          assert.match(init, /totalplay-stb-v0365\\.js/);
+          assert.ok(js.includes('data-tp-palette="dark"'));
+          assert.ok(js.includes('data-tp-palette="system"'));
+          assert.ok(js.includes('--tp65-canvas:#151725'));
+          assert.ok(js.includes('--tp65-canvas:var(--ha-card-background'));
+          assert.ok(js.includes('tp65ApplyFull(popup._popupCard)'));
+          assert.ok(init.includes('totalplay-stb-v0365.js'));
           console.log('Totalplay light, branded dark and HA-native system theme guards verified');
           JS
