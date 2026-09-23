@@ -1,0 +1,68 @@
+name: Complete Totalplay Light theme v0.3.64
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/complete-light-theme-v0364.yml']
+permissions:
+  contents: write
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Point Home Assistant at the fixed card and bump version
+        run: |
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          base=Path('custom_components/totalplay_stb')
+          wrapper=base/'www/totalplay-stb-v0364.js'
+          source=wrapper.read_text(encoding='utf-8')
+          assert "import './totalplay-stb-v0363.js?v=0.3.64';" in source
+          for key in ('TP64_LIGHT_CARD','TP64_LIGHT_REMOTE','TP64_LIGHT_LAUNCHER','TP64_LIGHT_DIALOG','tp64CardAppearance','tp64PopupAppearance'):
+              assert key in source, f'missing {key}'
+          manifest=base/'manifest.json'
+          meta=json.loads(manifest.read_text(encoding='utf-8'))
+          assert meta['version']=='0.3.63',meta['version']
+          meta['version']='0.3.64'
+          manifest.write_text(json.dumps(meta,indent=2)+'\n',encoding='utf-8')
+          init=base/'__init__.py'
+          text=init.read_text(encoding='utf-8')
+          old='str(www / "totalplay-stb-v0363.js")'
+          assert text.count(old)==1,'card resource registration changed'
+          text=text.replace(old,'str(www / "totalplay-stb-v0364.js")',1)
+          init.write_text(text,encoding='utf-8')
+          print('PASS: Light theme, popup and remote styles registered for v0.3.64')
+          PY
+      - name: Validate frontend syntax, theme coverage and manifest
+        run: |
+          node --input-type=module --check < custom_components/totalplay_stb/www/totalplay-stb-v0364.js
+          node --input-type=module --check < custom_components/totalplay_stb/www/totalplay-stb-v0363.js
+          node --check custom_components/totalplay_stb/www/totalplay-stb-card.js
+          python3 -m json.tool custom_components/totalplay_stb/manifest.json >/dev/null
+          python3 -m compileall -q custom_components/totalplay_stb
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          base=Path('custom_components/totalplay_stb')
+          source=(base/'www/totalplay-stb-v0364.js').read_text()
+          assert json.loads((base/'manifest.json').read_text())['version']=='0.3.64'
+          assert 'str(www / "totalplay-stb-v0364.js")' in (base/'__init__.py').read_text()
+          for token in ('.frame','.header','.guide-scroll','.programme','.apps-only','.remote','.tp-brand-logo','.tp56-vertical-logo'):
+              assert token in source,token
+          assert 'drop-shadow' in source and 'data-tp-light' in source
+          print('PASS: all light-theme surfaces and original logo contrast rules present')
+          PY
+      - name: Commit validated integration changes and publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git rm .github/workflows/complete-light-theme-v0364.yml
+          git add custom_components/totalplay_stb/www/totalplay-stb-v0364.js custom_components/totalplay_stb/manifest.json custom_components/totalplay_stb/__init__.py
+          git commit -m 'v0.3.64: complete Light theme on Totalplay card, popup and remote'
+          git push origin HEAD:main
+          if ! gh release view v0.3.64 >/dev/null 2>&1; then
+            gh release create v0.3.64 --target "$(git rev-parse HEAD)" --title v0.3.64 --notes 'Complete Light theme for the Totalplay guide, header, apps, controls, remote and popup. Overrides legacy hard-coded dark styles, keeps the original logo graphics and outlines their white details only in Light mode. Dark/System and normal popup closing are unchanged.' || gh release view v0.3.64
+          fi
