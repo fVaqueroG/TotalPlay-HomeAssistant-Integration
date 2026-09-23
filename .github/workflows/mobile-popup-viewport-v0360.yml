@@ -21,8 +21,8 @@ jobs:
           module_file = root / 'www/totalplay-stb-v0357.js'
           manifest_file = root / 'manifest.json'
           source = module_file.read_text(encoding='utf-8')
-          old = '            @media (max-width: 600px) {\n              dialog.tp-stb-popup-dialog {'
-          new = '            @media (max-width: 600px) {\n              dialog.tp-stb-popup-dialog,\n              dialog.tp-stb-popup-dialog[data-fv-popup-size="normal"],\n              dialog.tp-stb-popup-dialog[data-fv-popup-size="wide"],\n              dialog.tp-stb-popup-dialog[data-fv-popup-size="fullscreen"] {'
+          old = '  @media (max-width: 600px) {\n    dialog.tp-stb-popup-dialog {'
+          new = '  @media (max-width: 600px) {\n    dialog.tp-stb-popup-dialog,\n    dialog.tp-stb-popup-dialog[data-fv-popup-size="normal"],\n    dialog.tp-stb-popup-dialog[data-fv-popup-size="wide"],\n    dialog.tp-stb-popup-dialog[data-fv-popup-size="fullscreen"] {'
           assert source.count(old) == 1, 'Expected mobile layout anchor not found'
           source = source.replace(old, new, 1)
           assert source.count("replaceChildren('v0.3.59')") == 1
