@@ -1,7 +1,7 @@
-/* Totalplay v0.3.59 — shared FV media popup shell built into the HACS integration.
+/* Totalplay v0.3.60 — shared FV media popup shell built into the HACS integration.
  * Keep previous full card, editor, branding, remote, fit and auto-close handlers.
  */
-import './totalplay-stb-v0356.js?v=0.3.59';
+import './totalplay-stb-v0356.js?v=0.3.60';
 
 const TP59_POPUP = customElements.get('totalplay-stb-popup-card');
 const TP59_FULL = customElements.get('totalplay-stb-card');
@@ -70,7 +70,10 @@ const TP59_SHELL = `
   }
   .tp-stb-popup-close ha-icon { --mdc-icon-size: 22px; }
   @media (max-width: 600px) {
-    dialog.tp-stb-popup-dialog {
+    dialog.tp-stb-popup-dialog,
+    dialog.tp-stb-popup-dialog[data-fv-popup-size="normal"],
+    dialog.tp-stb-popup-dialog[data-fv-popup-size="wide"],
+    dialog.tp-stb-popup-dialog[data-fv-popup-size="fullscreen"] {
       inset: 0 !important;
       width: 100vw !important;
       max-width: 100vw !important;
@@ -115,5 +118,5 @@ TP59_POPUP.prototype._openPopup = function (...args) {
 const tp59PreviousFullConfig = TP59_FULL.prototype.setConfig;
 TP59_FULL.prototype.setConfig = function (config) {
   tp59PreviousFullConfig.call(this, config);
-  this.shadowRoot?.querySelector('.tp-version-badge')?.replaceChildren('v0.3.59');
+  this.shadowRoot?.querySelector('.tp-version-badge')?.replaceChildren('v0.3.60');
 };
