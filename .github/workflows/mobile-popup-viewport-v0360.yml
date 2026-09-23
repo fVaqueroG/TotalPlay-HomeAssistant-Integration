@@ -1,0 +1,54 @@
+name: Mobile popup viewport v0.3.60
+'on':
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/mobile-popup-viewport-v0360.yml
+permissions:
+  contents: write
+jobs:
+  mobile-popup:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Override specific Normal/Wide width and height rules on mobile
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          root = Path('custom_components/totalplay_stb')
+          module_file = root / 'www/totalplay-stb-v0357.js'
+          manifest_file = root / 'manifest.json'
+          source = module_file.read_text(encoding='utf-8')
+          old = '            @media (max-width: 600px) {\n              dialog.tp-stb-popup-dialog {'
+          new = '            @media (max-width: 600px) {\n              dialog.tp-stb-popup-dialog,\n              dialog.tp-stb-popup-dialog[data-fv-popup-size="normal"],\n              dialog.tp-stb-popup-dialog[data-fv-popup-size="wide"],\n              dialog.tp-stb-popup-dialog[data-fv-popup-size="fullscreen"] {'
+          assert source.count(old) == 1, 'Expected mobile layout anchor not found'
+          source = source.replace(old, new, 1)
+          assert source.count("replaceChildren('v0.3.59')") == 1
+          source = source.replace("replaceChildren('v0.3.59')", "replaceChildren('v0.3.60')", 1)
+          assert source.count("import './totalplay-stb-v0356.js?v=0.3.59';") == 1
+          source = source.replace("import './totalplay-stb-v0356.js?v=0.3.59';", "import './totalplay-stb-v0356.js?v=0.3.60';", 1)
+          source = source.replace('Totalplay v0.3.59 —', 'Totalplay v0.3.60 —', 1)
+          module_file.write_text(source, encoding='utf-8')
+          manifest = json.loads(manifest_file.read_text(encoding='utf-8'))
+          assert manifest['version'] == '0.3.59', manifest['version']
+          manifest['version'] = '0.3.60'
+          manifest_file.write_text(json.dumps(manifest, indent=2) + '\n', encoding='utf-8')
+          assert 'dialog.tp-stb-popup-dialog[data-fv-popup-size="normal"]' in source
+          assert 'height: 44px !important' in source and 'height: 48px !important' in source
+          print('PASS: Totalplay Normal/Wide/fullscreen fit mobile viewport and use common 44px header.')
+          PY
+          node --check custom_components/totalplay_stb/www/totalplay-stb-v0357.js
+          python3 -m json.tool custom_components/totalplay_stb/manifest.json >/dev/null
+      - name: Publish v0.3.60
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add custom_components/totalplay_stb/www/totalplay-stb-v0357.js custom_components/totalplay_stb/manifest.json
+          git commit -m 'v0.3.60: keep all Totalplay popup sizes edge-to-edge on mobile'
+          git push origin HEAD:main
+          gh release create v0.3.60 --target "$(git rev-parse HEAD)" --title 'v0.3.60' --notes 'Finish the shared media popup shell across Totalplay/Nuvio/Streaming Browser: mobile Normal/Wide/fullscreen sizing now overrides the desktop presets and fills the full viewport. Preserves desktop 900x700 Normal / 1440x900 Wide, 48px desktop and 44px mobile headers, existing guide, remote and branding.'
