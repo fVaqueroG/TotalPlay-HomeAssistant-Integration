@@ -1,6 +1,7 @@
-/* v0.3.56: Render the approved vertical Totalplay logo in a clean trigger.
+/* v0.3.58: Display the approved vertical Totalplay logo at a balanced visual
+ * size alongside the other media popup launchers. Keep the source artwork,
+ * button dimensions, full guide and remote behavior unchanged.
  * Rebuild only Vertical Logo mode after all legacy popup layers have run.
- * This avoids stale image handlers/CSS while preserving popup behaviour.
  */
 import './totalplay-stb-v0355.js?v=0.3.56';
 
@@ -8,7 +9,7 @@ const TP56_POPUP = customElements.get('totalplay-stb-popup-card');
 const TP56_FULL = customElements.get('totalplay-stb-card');
 if (!TP56_POPUP || !TP56_FULL) throw new Error('Totalplay card types unavailable');
 
-const TP56_VERTICAL_URL = '/totalplay_stb/artwork/brand/vertical?v=0.3.56';
+const TP56_VERTICAL_URL = '/totalplay_stb/artwork/brand/vertical?v=0.3.58';
 const TP56_STYLE = `
   :host([data-popup-brand="vertical_logo"]) {
     display:block !important;
@@ -47,6 +48,10 @@ const TP56_STYLE = `
     max-width:min(100%,190px) !important;
     max-height:92px !important;
     object-fit:contain !important;
+    /* The original approved PNG has generous clear margins. Enlarge its
+       visible artwork, not the card or its layout box. */
+    transform:scale(1.45);
+    transform-origin:center;
     opacity:1 !important;
     visibility:visible !important;
     flex:0 0 auto;
@@ -122,5 +127,5 @@ TP56_POPUP.prototype.setConfig = function(config) {
 const tp56PreviousFullConfig = TP56_FULL.prototype.setConfig;
 TP56_FULL.prototype.setConfig = function(config) {
   tp56PreviousFullConfig.call(this, config);
-  this.shadowRoot?.querySelector('.tp-version-badge')?.replaceChildren('v0.3.56');
+  this.shadowRoot?.querySelector('.tp-version-badge')?.replaceChildren('v0.3.58');
 };
