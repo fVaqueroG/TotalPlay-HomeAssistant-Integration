@@ -1,0 +1,50 @@
+name: Expose Totalplay visual editor theme selector v0.3.63
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/expose-theme-editor-v0363.yml'
+permissions:
+  contents: write
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Serve current editor module through existing Lovelace URL
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import json
+          base=Path('custom_components/totalplay_stb')
+          init=base/'__init__.py'
+          text=init.read_text()
+          old='str(www / "totalplay-stb-v0357.js")'
+          assert text.count(old)==1, 'unexpected registered card bundle'
+          init.write_text(text.replace(old,'str(www / "totalplay-stb-v0363.js")',1))
+          new=base/'www/totalplay-stb-v0363.js'
+          assert new.exists() and "import './totalplay-stb-v0357.js?v=0.3.63';" in new.read_text()
+          assert 'tp63BaseEditorDraw' in new.read_text() and 'tp63BasePopupDraw' in new.read_text()
+          manifest=base/'manifest.json'
+          data=json.loads(manifest.read_text())
+          assert data['version']=='0.3.62',data['version']
+          data['version']='0.3.63'
+          manifest.write_text(json.dumps(data,indent=2)+'\n')
+          print('The existing Lovelace resource now serves the new full/popup Theme visual editor wrapper')
+          PY
+      - name: Validate modules and manifest
+        run: |
+          node --input-type=module --check < custom_components/totalplay_stb/www/totalplay-stb-v0363.js
+          python3 -m compileall -q custom_components/totalplay_stb
+          python3 -m json.tool custom_components/totalplay_stb/manifest.json > /dev/null
+      - name: Commit and publish versioned release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git rm .github/workflows/expose-theme-editor-v0363.yml
+          git add custom_components/totalplay_stb/__init__.py custom_components/totalplay_stb/manifest.json custom_components/totalplay_stb/www/totalplay-stb-v0363.js
+          git commit -m 'v0.3.63: show Light Dark System in full and popup visual editors'
+          git push origin HEAD:main
+          gh release create v0.3.63 --target "$(git rev-parse HEAD)" --title v0.3.63 --notes 'Expose the Light, Dark and System selector directly in both Totalplay card visual editors, work around historical cached card wrappers, and apply the selection to the full card, compact button and popup. No change to popup closing behavior.'
