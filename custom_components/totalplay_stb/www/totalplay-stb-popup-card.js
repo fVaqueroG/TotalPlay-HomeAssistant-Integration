@@ -83,10 +83,14 @@ class TotalplayStbPopupCard extends HTMLElement {
     }
     button.addEventListener('click',()=>this._openPopup());
     card.append(button);root.append(css,card);
+    window.tpApplyCardTheme(this,this._config.theme);
+    if (this._dialog) window.tpApplyCardTheme(this._dialog,this._config.theme);
     this._button=button;
   }
   set hass(hass) {
     this._hass=hass;
+    window.tpApplyCardTheme(this,this._config?.theme);
+    if (this._dialog) window.tpApplyCardTheme(this._dialog,this._config?.theme);
     if (this._popupCard && this._dialog?.open) this._popupCard.hass=hass;
   }
   _openPopup() {
@@ -112,6 +116,7 @@ class TotalplayStbPopupCard extends HTMLElement {
     dialog.addEventListener('close',()=>this._cleanupPopup(),{once:true});
     this._dialog=dialog;
     document.body.appendChild(dialog);
+    window.tpApplyCardTheme(dialog,this._config.theme);
     try {
       dialog.showModal();
       const full=document.createElement('totalplay-stb-card');
