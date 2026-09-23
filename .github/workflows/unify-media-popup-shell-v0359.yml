@@ -1,0 +1,187 @@
+name: Unified media popup shell v0.3.59
+'on':
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/unify-media-popup-shell-v0359.yml
+permissions:
+  contents: write
+jobs:
+  unify-popup:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+      - name: Build HACS-bundled Totalplay popup shell and update its resource
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          import json
+          root = Path('custom_components/totalplay_stb')
+          manifest_file = root / 'manifest.json'
+          setup_file = root / '__init__.py'
+          size_file = root / 'www/totalplay-stb-popup-sizes.js'
+          new_module = root / 'www/totalplay-stb-v0357.js'
+          assert not new_module.exists(), 'New popup module already exists'
+          source = setup_file.read_text(encoding='utf-8')
+          old = 'str(www / "totalplay-stb-v0356.js")'
+          assert source.count(old) == 1, 'Could not identify active Totalplay module'
+          setup_file.write_text(source.replace(old, 'str(www / "totalplay-stb-v0357.js")', 1), encoding='utf-8')
+          sizes = size_file.read_text(encoding='utf-8')
+          anchor = "  if (size === 'fullscreen') return 'fullscreen';"
+          assert sizes.count(anchor) == 1
+          sizes = sizes.replace(anchor, "  if (size === undefined || size === null || size === '') return 'wide';\n" + anchor, 1)
+          size_file.write_text(sizes, encoding='utf-8')
+          manifest = json.loads(manifest_file.read_text(encoding='utf-8'))
+          assert manifest['version'] == '0.3.58', manifest['version']
+          manifest['version'] = '0.3.59'
+          manifest_file.write_text(json.dumps(manifest, indent=2) + '\n', encoding='utf-8')
+          assert 'totalplay-stb-v0357.js' in setup_file.read_text(encoding='utf-8')
+          PY
+          cat > custom_components/totalplay_stb/www/totalplay-stb-v0357.js <<'JS'
+          /* Totalplay v0.3.59 — shared FV media popup shell built into the HACS integration.
+           * Keep previous full card, editor, branding, remote, fit and auto-close handlers.
+           */
+          import './totalplay-stb-v0356.js?v=0.3.59';
+
+          const TP59_POPUP = customElements.get('totalplay-stb-popup-card');
+          const TP59_FULL = customElements.get('totalplay-stb-card');
+          if (!TP59_POPUP || !TP59_FULL) throw new Error('Totalplay popup/full card unavailable');
+
+          const TP59_SHELL = `
+            dialog.tp-stb-popup-dialog {
+              box-sizing: border-box !important;
+              width: min(1440px, calc(100vw - 24px)) !important;
+              max-width: calc(100vw - 24px) !important;
+              height: min(900px, calc(100dvh - 24px)) !important;
+              max-height: calc(100dvh - 24px) !important;
+              border-radius: 18px !important;
+              overflow: hidden !important;
+            }
+            dialog.tp-stb-popup-dialog[data-fv-popup-size="normal"] {
+              width: min(900px, calc(100vw - 24px)) !important;
+              height: min(700px, calc(100dvh - 24px)) !important;
+            }
+            dialog.tp-stb-popup-dialog[data-fv-popup-size="fullscreen"] {
+              inset: 0 !important;
+              width: 100vw !important;
+              max-width: 100vw !important;
+              height: 100dvh !important;
+              max-height: 100dvh !important;
+              border-radius: 0 !important;
+              border: 0 !important;
+              margin: 0 !important;
+            }
+            .tp-stb-popup-head {
+              box-sizing: border-box !important;
+              height: 48px !important;
+              min-height: 48px !important;
+              flex: 0 0 48px !important;
+              display: flex !important;
+              align-items: center !important;
+              justify-content: space-between !important;
+              gap: 12px !important;
+              padding: 0 12px 0 20px !important;
+              border-bottom: 1px solid var(--divider-color, #8884) !important;
+            }
+            .tp-stb-popup-title {
+              min-width: 0 !important;
+              overflow: hidden !important;
+              text-overflow: ellipsis !important;
+              white-space: nowrap !important;
+              font: inherit !important;
+              font-size: 16px !important;
+              font-weight: 600 !important;
+            }
+            .tp-stb-popup-close {
+              box-sizing: border-box !important;
+              display: grid !important;
+              place-items: center !important;
+              flex: 0 0 36px !important;
+              width: 36px !important;
+              min-width: 36px !important;
+              height: 36px !important;
+              min-height: 36px !important;
+              padding: 0 !important;
+              border: 0 !important;
+              border-radius: 50% !important;
+              background: var(--secondary-background-color) !important;
+              color: var(--primary-text-color) !important;
+              cursor: pointer !important;
+            }
+            .tp-stb-popup-close ha-icon { --mdc-icon-size: 22px; }
+            @media (max-width: 600px) {
+              dialog.tp-stb-popup-dialog {
+                inset: 0 !important;
+                width: 100vw !important;
+                max-width: 100vw !important;
+                height: 100dvh !important;
+                max-height: 100dvh !important;
+                margin: 0 !important;
+                border-radius: 0 !important;
+                border: 0 !important;
+              }
+              .tp-stb-popup-head {
+                height: 44px !important;
+                min-height: 44px !important;
+                flex-basis: 44px !important;
+                padding: 0 8px 0 12px !important;
+              }
+            }
+          `;
+
+          const tp59PreviousOpen = TP59_POPUP.prototype._openPopup;
+          TP59_POPUP.prototype._openPopup = function (...args) {
+            const result = tp59PreviousOpen.apply(this, args);
+            const dialog = this._dialog;
+            if (!dialog?.open) return result;
+            const configured = this._config?.popup_size;
+            dialog.dataset.fvPopupSize = configured === 'fullscreen' ? 'fullscreen'
+              : configured === 'normal' || ['auto', 'small', 'medium', 'custom'].includes(configured)
+                ? 'normal' : 'wide';
+            const css = document.createElement('style');
+            css.textContent = TP59_SHELL;
+            dialog.appendChild(css);
+            const close = dialog.querySelector('.tp-stb-popup-close');
+            if (close && !close.querySelector('ha-icon')) {
+              const icon = document.createElement('ha-icon');
+              icon.setAttribute('icon', 'mdi:close');
+              close.replaceChildren(icon);
+              close.title = 'Close';
+            }
+            requestAnimationFrame(() => this._popupCard?._tpQueueGuideFit?.());
+            return result;
+          };
+
+          const tp59PreviousFullConfig = TP59_FULL.prototype.setConfig;
+          TP59_FULL.prototype.setConfig = function (config) {
+            tp59PreviousFullConfig.call(this, config);
+            this.shadowRoot?.querySelector('.tp-version-badge')?.replaceChildren('v0.3.59');
+          };
+          JS
+          node --check custom_components/totalplay_stb/www/totalplay-stb-v0357.js
+          python3 -m py_compile custom_components/totalplay_stb/__init__.py
+          python3 -m json.tool custom_components/totalplay_stb/manifest.json >/dev/null
+          python3 - <<'PY'
+          from pathlib import Path
+          root = Path('custom_components/totalplay_stb')
+          module = (root / 'www/totalplay-stb-v0357.js').read_text()
+          assert "import './totalplay-stb-v0356.js?v=0.3.59'" in module
+          assert "height: 48px !important" in module and "height: 44px !important" in module
+          assert "width: min(900px" in module and "width: min(1440px" in module
+          assert 'totalplay-stb-v0357.js' in (root / '__init__.py').read_text()
+          print('PASS: Totalplay production resource imports preserved features and unified popup shell.')
+          PY
+      - name: Commit and release v0.3.59
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add custom_components/totalplay_stb/__init__.py custom_components/totalplay_stb/manifest.json custom_components/totalplay_stb/www/totalplay-stb-popup-sizes.js custom_components/totalplay_stb/www/totalplay-stb-v0357.js
+          git commit -m 'v0.3.59: standardize Totalplay popup dimensions and header'
+          git push origin HEAD:main
+          gh release create v0.3.59 --target "$(git rev-parse HEAD)" --title 'v0.3.59' --notes 'Bundle a matching Normal (900 x 700), Wide (1440 x 900), Full-screen popup and 48px desktop / 44px mobile header with Nuvio and Streaming Browser. Use identical 36px close icon, keep transparent approved logos and all existing guide/remote/editor functionality. New cards default to Wide; legacy explicit Normal sizes are preserved.'
