@@ -7,6 +7,7 @@ const TP_SIZE_EDITOR = customElements.get('totalplay-stb-popup-card-editor');
 if (!TP_SIZE_POPUP || !TP_SIZE_EDITOR) throw new Error('Totalplay popup components unavailable');
 
 const tpSizeNormalize = size => {
+  if (size === undefined || size === null || size === '') return 'wide';
   if (size === 'fullscreen') return 'fullscreen';
   if (size === 'wide' || size === 'large') return 'wide';
   return 'normal'; // Including existing auto, small, medium and custom cards.
