@@ -17,7 +17,7 @@ const TP66_STYLE = `
   border:1px solid var(--tp-line,var(--divider-color,#596176));
   background:var(--tp65-control,var(--tp-bg,var(--card-background-color,#242136)));
   color:var(--tp-ink,var(--primary-text-color,#fff));
-  font:700 13px/1.2 inherit;cursor:pointer;white-space:nowrap;
+  font-family:inherit;font-size:13px;font-weight:700;line-height:1.2;cursor:pointer;white-space:nowrap;
   box-shadow:0 4px 16px #0006;touch-action:manipulation;
 }
 .tp66-back-top[hidden]{display:none!important}
@@ -57,7 +57,8 @@ function tp66Targets(card) {
     if (node.scrollHeight > node.clientHeight + 24 &&
         /auto|scroll/.test(getComputedStyle(node).overflowY)) tp66UniquePush(list,node);
   }
-  if (document.scrollingElement) tp66UniquePush(list,document.scrollingElement);
+  if (!card.closest('.tp-stb-popup-body') && document.scrollingElement)
+    tp66UniquePush(list,document.scrollingElement);
   return list.filter(tp66Scrollable);
 }
 function tp66Refresh(card) {
@@ -81,13 +82,30 @@ function tp66BackToTop(card) {
     if (node.scrollTop<=0) continue;
     const insideCard = node===cardScroller || card.contains(node) || card.shadowRoot?.contains(node);
     if (insideCard || node===popupBody) {
-      if (typeof node.scrollTo==='function') node.scrollTo({top:0,behavior:'smooth'});
+      if (typeof node.scrollTo==='function') node.scrollTo({top:0,left:node.scrollLeft,behavior:'smooth'});
       else node.scrollTop=0;
     } else {
       card.scrollIntoView({behavior:'smooth',block:'start'});
     }
   }
   tp66Schedule(card);
+}
+function tp66Observe(card) {
+  // Scroll events from the card's shadow root are not guaranteed to
+  // reach window listeners. Watch the actual guide, apps and popup
+  // containers and replace listeners when setConfig rebuilds them.
+  const nodes=[card._scroll,card._appsPanel,
+    card._appsPanel?.querySelector('.apps-only'),
+    card.shadowRoot?.querySelector('.main > .apps-only:not(.hidden)'),
+    card.closest('.tp-stb-popup-body')].filter(Boolean);
+  const previous=card._tp66Nodes||[];
+  const callback=card._tp66ScrollListenerLocal ||
+    (card._tp66ScrollListenerLocal=()=>tp66Schedule(card));
+  for(const node of previous) if(!nodes.includes(node))
+    node.removeEventListener('scroll',callback);
+  for(const node of nodes) if(!previous.includes(node))
+    node.addEventListener('scroll',callback,{passive:true});
+  card._tp66Nodes=nodes;
 }
 function tp66Ensure(card) {
   const root=card.shadowRoot;
@@ -109,6 +127,7 @@ function tp66Ensure(card) {
     root.appendChild(button);
   }
   card._tp66Button=button;
+  tp66Observe(card);
   if (card.isConnected && !card._tp66ScrollListener) {
     card._tp66ScrollListener=()=>tp66Schedule(card);
     // Capture non-bubbling scroll events from the guide, apps, popup and HA
@@ -133,7 +152,7 @@ TP66_CARD.prototype.connectedCallback=function() {
 const tp66OriginalSwitch=TP66_CARD.prototype._switch;
 if (tp66OriginalSwitch) TP66_CARD.prototype._switch=function(...args) {
   const result=tp66OriginalSwitch.apply(this,args);
-  tp66Schedule(this);
+  tp66Observe(this);tp66Schedule(this);
   return result;
 };
 const tp66OriginalDisconnect=TP66_CARD.prototype.disconnectedCallback;
@@ -143,7 +162,10 @@ TP66_CARD.prototype.disconnectedCallback=function() {
     window.removeEventListener('resize',this._tp66ScrollListener);
     this._tp66ScrollListener=null;
   }
-  if (this._tp66Frame) cancelAnimationFrame(this._tp66Frame);
+  for (const node of this._tp66Nodes||[])
+  node.removeEventListener('scroll',this._tp66ScrollListenerLocal);
+this._tp66Nodes=[];
+if (this._tp66Frame) cancelAnimationFrame(this._tp66Frame);
   this._tp66Frame=0;
   tp66OriginalDisconnect?.call(this);
 };
