@@ -1,0 +1,55 @@
+name: Publish Totalplay reliable mobile Back v0.3.69
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/publish-mobile-back-v0369.yml']
+permissions:
+  contents: write
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Replace previous guard and validate frontend
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          import json,urllib.request
+          folder=Path('custom_components/totalplay_stb/www')
+          entry=folder/'totalplay-stb-v0366.js'
+          old=entry.read_text(encoding='utf-8')
+          marker='/* Totalplay v0.3.68: Android Back navigates the card, not the decoder. */'
+          assert old.count(marker)==1, 'Previous Back implementation missing'
+          original=old.split(marker,1)[0].rstrip()
+          patch=(folder/'mobile-back-v0369.patch.js').read_text(encoding='utf-8')
+          assert patch.count('  /* SHARED_BACK_MANAGER */')==1
+          # Pin the shared coordinator source; the released JS embeds it and works standalone.
+          url='https://raw.githubusercontent.com/fVaqueroG/home-assistant-nuvio/b7b0a5c4085b207196c72eb3d42da3af0bb44ce9/custom_components/nuvio/frontend/mobile-back-v0495.patch.js'
+          with urllib.request.urlopen(url,timeout=20) as response: shared_source=response.read().decode('utf-8')
+          start=shared_source.index('  const manager = window.__fvHaCardBackManagerV2')
+          end=shared_source.index('  const nested = card =>',start)
+          shared=shared_source[start:end]
+          assert 'function onPop(event)' in shared and 'if (unwinding)' in shared
+          entry.write_text(original.replace("replaceChildren('v0.3.66')","replaceChildren('v0.3.69')")+'\n\n'+patch.replace('  /* SHARED_BACK_MANAGER */',shared,1),encoding='utf-8')
+          manifest=Path('custom_components/totalplay_stb/manifest.json')
+          data=json.loads(manifest.read_text(encoding='utf-8'))
+          assert data['version']=='0.3.68'
+          data['version']='0.3.69'
+          manifest.write_text(json.dumps(data,indent=2,ensure_ascii=False)+'\n',encoding='utf-8')
+          assert '/* SHARED_BACK_MANAGER */' not in entry.read_text()
+          PY
+          node --check custom_components/totalplay_stb/www/totalplay-stb-v0366.js
+          python3 -m json.tool custom_components/totalplay_stb/manifest.json >/dev/null
+          echo 'PASS: Totalplay coordinated mobile Back syntax and version'
+      - name: Commit and publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add custom_components/totalplay_stb/www/totalplay-stb-v0366.js custom_components/totalplay_stb/manifest.json
+          git commit -m 'fix: preserve Totalplay Back handling through popup teardown (v0.3.69)'
+          git push origin HEAD:main
+          gh release create v0.3.69 --target "$(git rev-parse HEAD)" --title v0.3.69 --notes 'Keep Android Back within the active Totalplay popup through loading, remote dismissal, and browser-history cleanup; leave decoder Back command separate.'
