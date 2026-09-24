@@ -1,0 +1,87 @@
+name: Publish Totalplay reliable Back v0.3.70
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/fix-native-back-v0370.yml']
+permissions:
+  contents: write
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Replace extra Back navigation and validate
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          import json
+          folder=Path('custom_components/totalplay_stb/www')
+          path=folder/'totalplay-stb-v0366.js'
+          text=path.read_text(encoding='utf-8')
+          marker='  const manager = window.__fvHaCardBackManagerV2 ||='
+          assert text.count(marker)==1, 'Old Totalplay history manager missing or duplicated'
+          start=text.index(marker)
+          end=text.index('  const nested = card =>',start)
+          fixed=(folder/'mobile-back-v0370-manager.js.txt').read_text(encoding='utf-8')
+          assert 'history.back(' not in fixed
+          text=text[:start]+fixed+text[end:]
+          text=text.replace('/* Totalplay v0.3.69: coordinate Android Back through loading and popup teardown. */','/* Totalplay v0.3.70: native Back closes the frontend remote without extra browser navigation. */',1)
+          path.write_text(text,encoding='utf-8')
+          manifest=Path('custom_components/totalplay_stb/manifest.json')
+          data=json.loads(manifest.read_text(encoding='utf-8'))
+          assert data['version']=='0.3.69'
+          data['version']='0.3.70'
+          manifest.write_text(json.dumps(data,indent=2,ensure_ascii=False)+'\n',encoding='utf-8')
+          PY
+          node --check custom_components/totalplay_stb/www/totalplay-stb-v0366.js
+          node --check custom_components/totalplay_stb/www/totalplay-stb-popup-card.js
+          python3 -m json.tool custom_components/totalplay_stb/manifest.json >/dev/null
+      - name: Test remote priority and native mobile Back states
+        run: |
+          node - <<'JS'
+          const fs=require('node:fs'),vm=require('node:vm'),assert=require('node:assert/strict');
+          const code=fs.readFileSync('custom_components/totalplay_stb/www/totalplay-stb-v0366.js','utf8');
+          const start=code.indexOf('  const manager = window.__fvHaCardBackManagerV3 ||=');
+          const end=code.indexOf('  const nested = card =>',start);
+          assert(start>0&&end>start,'Shared navigation guard exists');
+          const managerSource=code.slice(start,end);
+          assert(!/\bhistory\.back\s*\(/.test(managerSource.replace(/\/\/[^\n]*/g,'')),'No synthetic Back on native cancellation or popup cleanup');
+          let now=1000,index=0,backCalls=0,steps=0;
+          const entries=[{state:{ha:1},url:'https://ha.local/home'}],listeners={};
+          const window={addEventListener(n,fn){listeners[n]=fn;},removeEventListener(n,fn){if(listeners[n]===fn)delete listeners[n];}};
+          const history={get state(){return entries[index].state;},pushState(state,_,url){entries.splice(index+1);entries.push({state,url});index++;},back(){backCalls++;index--;listeners.popstate?.({stopImmediatePropagation(){}});}};
+          const context={window,history,location:{href:'https://ha.local/home'},Date:{now:()=>now},Math,console};
+          const manager=vm.runInNewContext('(()=>{const mobile=()=>true;'+managerSource+'return manager;})()',context);
+          const owner={back(){steps++;}};
+          manager.add(owner);assert.equal(entries.length,3,'Two spare same-page history states on open');
+          history.back();assert.equal(steps,1,'Android hardware history Back stays in card');
+          assert.equal(entries.length,3,'Guard restored before re-render');
+          now+=200;manager.request(owner);assert.equal(steps,2,'Native dialog cancel acts directly');
+          assert.equal(backCalls,1,'No second history Back from cancel');
+          manager.remove(owner);assert.equal(backCalls,1,'No extra browser Back on teardown');
+          assert(!listeners.popstate,'Handler detached when popup is closed');
+          const stepSource=code.slice(code.indexOf('  function step(card) {',end),code.indexOf('  const priorOpen = Popup.prototype._openPopup;',end));
+          assert(stepSource.includes("card._tab === 'apps'"),'Apps-to-guide handler exists');
+          const step=vm.runInNewContext('(()=>{'+stepSource+'return step;})()');
+          let remoteClosed=0;
+          const card={_remoteOpen:true,_tab:'apps',_remote:{hidden:false},_toggleRemote(){remoteClosed++;this._remoteOpen=false;this._remote.hidden=true;},_switch(tab){this._tab=tab;}};
+          assert.equal(step(card),true);assert.equal(remoteClosed,1,'First Back closes frontend remote');
+          assert.equal(card._tab,'apps','Remote closing must not change app page');
+          assert.equal(step(card),true);assert.equal(card._tab,'guide','Second Back returns to guide');
+          assert.equal(step(card),false,'Only then may popup close');
+          const popup=fs.readFileSync('custom_components/totalplay_stb/www/totalplay-stb-popup-card.js','utf8');
+          assert(popup.includes("dialog.addEventListener('cancel',event=>"),'Foreground remote modal has a native cancel handler');
+          console.log('PASS: remote before Apps, hardware Back, native dialog cancellation, popup cleanup');
+          JS
+      - name: Commit and publish verified patch
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add custom_components/totalplay_stb/www/totalplay-stb-v0366.js custom_components/totalplay_stb/manifest.json
+          git commit -m 'fix: prioritize Totalplay remote on Android Back without exiting app (v0.3.70)'
+          git push origin HEAD:main
+          gh release create v0.3.70 --target "$(git rev-parse HEAD)" --title v0.3.70 --notes 'Handle Android native cancel directly without another history Back; close the frontend remote before Apps, then guide and popup. Restore spare same-page history during loading and screen transitions; includes automated navigation tests. Companion-app device behavior needs verification.'
