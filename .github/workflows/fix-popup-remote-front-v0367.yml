@@ -1,0 +1,119 @@
+name: Fix Totalplay popup remote foreground
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/fix-popup-remote-front-v0367.yml']
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+      - name: Elevate the existing floating Totalplay remote above the guide popup
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          import json
+          base=Path('custom_components/totalplay_stb')
+          path=base/'www/totalplay-stb-popup-card.js'
+          source=path.read_text()
+          assert 'class TotalplayStbPopupCard extends HTMLElement' in source
+          assert '_openPopup() {' in source and '_cleanupPopup() {' in source
+          assert '/* Totalplay remote foreground bridge v1 */' not in source
+          bridge=r'''
+          /* Totalplay remote foreground bridge v1 */
+          function tpRaisePopupRemote(popup){
+            let portal=null,attributes=null,top=null,stopped=false;
+            const card=()=>popup._popupCard;
+            const find=()=>card()?._remotePortal||null;
+            function dismiss(){
+              const dialog=top;top=null;
+              if(!dialog)return;
+              if(portal?.parentNode===dialog&&portal.isConnected)document.body.appendChild(portal);
+              if(dialog.open)dialog.close();
+              dialog.remove();
+            }
+            function sync(){
+              if(stopped)return;
+              const found=find();
+              if(found!==portal){
+                attributes?.disconnect();dismiss();portal=found;
+                if(portal){attributes=new MutationObserver(sync);attributes.observe(portal,{attributes:true,attributeFilter:['hidden','style','class','aria-hidden']});}
+              }
+              if(!portal?.isConnected||portal.hidden||portal.getAttribute('aria-hidden')==='true'||getComputedStyle(portal).display==='none'){dismiss();return;}
+              if(top)return;
+              const dialog=document.createElement('dialog');top=dialog;
+              dialog.className='tp-remote-front-dialog';
+              dialog.style.cssText='position:fixed;inset:0;margin:0;padding:0;border:0;width:100vw;height:100dvh;max-width:100vw;max-height:100dvh;overflow:visible;background:transparent;color:inherit;';
+              const style=document.createElement('style');
+              style.textContent='.tp-remote-front-dialog::backdrop{background:transparent!important;backdrop-filter:none!important}';
+              dialog.appendChild(style);
+              dialog.addEventListener('cancel',event=>{
+                event.preventDefault();
+                const close=portal?.shadowRoot?.querySelector('.tp-remote-close,.remote-close,[aria-label="Close remote"],[aria-label="Close"]');
+                if(close)close.click();
+                else if(card()?._toggleRemote)card()._toggleRemote(false);
+                else portal.hidden=true;
+                queueMicrotask(sync);
+              });
+              const children=new MutationObserver(()=>queueMicrotask(sync));
+              children.observe(dialog,{childList:true});
+              dialog.addEventListener('close',()=>children.disconnect(),{once:true});
+              document.body.appendChild(dialog);dialog.appendChild(portal);
+              try{dialog.showModal();}
+              catch(error){dismiss();console.error('Totalplay remote foreground:',error);}
+            }
+            const body=new MutationObserver(sync);body.observe(document.body,{childList:true});
+            const onClick=()=>queueMicrotask(sync);
+            document.addEventListener('click',onClick,true);
+            const onClose=()=>cleanup();
+            popup._dialog?.addEventListener('close',onClose,{once:true});
+            function cleanup(){
+              if(stopped)return;stopped=true;
+              attributes?.disconnect();body.disconnect();
+              document.removeEventListener('click',onClick,true);
+              popup._dialog?.removeEventListener('close',onClose);
+              dismiss();
+            }
+            sync();return cleanup;
+          }
+          const tpPopupOpenForeground=TotalplayStbPopupCard.prototype._openPopup;
+          TotalplayStbPopupCard.prototype._openPopup=function(...args){
+            const result=tpPopupOpenForeground.apply(this,args);
+            if(this._dialog?.open&&!this._remoteForegroundCleanup)this._remoteForegroundCleanup=tpRaisePopupRemote(this);
+            return result;
+          };
+          const tpPopupCloseForeground=TotalplayStbPopupCard.prototype._cleanupPopup;
+          TotalplayStbPopupCard.prototype._cleanupPopup=function(...args){
+            this._remoteForegroundCleanup?.();this._remoteForegroundCleanup=null;
+            return tpPopupCloseForeground.apply(this,args);
+          };
+          '''
+          path.write_text(source+'\n'+bridge)
+          manifest=base/'manifest.json';data=json.loads(manifest.read_text())
+          assert data['version']=='0.3.66',f"Unexpected base version {data['version']}"
+          data['version']='0.3.67';manifest.write_text(json.dumps(data,indent=2)+'\n')
+          for filename in ('totalplay-stb-card.js','totalplay-stb-popup-card.js'):
+            script=base/'www'/filename; text=script.read_text()
+            if '0.3.66' in text:script.write_text(text.replace('0.3.66','0.3.67'))
+          print('PASS: top-layer remote and popup cleanup; Totalplay v0.3.67')
+          PY
+          node --check custom_components/totalplay_stb/www/totalplay-stb-popup-card.js
+          node --check custom_components/totalplay_stb/www/totalplay-stb-card.js
+          python3 -m json.tool custom_components/totalplay_stb/manifest.json > /dev/null
+      - name: Commit and publish HACS release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add custom_components/totalplay_stb
+          git commit -m 'fix: show Totalplay remote above popup (v0.3.67)'
+          git push origin HEAD:main
+          gh release create v0.3.67 --target "$(git rev-parse HEAD)" --title v0.3.67 --notes 'Fix floating Totalplay remote stacking above the guide popup without rebuilding the guide or changing STB commands.'
