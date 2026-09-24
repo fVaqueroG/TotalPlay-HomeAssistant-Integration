@@ -1,0 +1,45 @@
+name: Publish Totalplay mobile Back v0.3.68
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/publish-mobile-back-v0368.yml']
+permissions:
+  contents: write
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Apply scoped mobile Back navigation
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          import json
+          folder=Path('custom_components/totalplay_stb/www')
+          entry=folder/'totalplay-stb-v0366.js'
+          patch=(folder/'mobile-back-v0368.patch.js').read_text(encoding='utf-8')
+          previous=entry.read_text(encoding='utf-8')
+          assert 'Totalplay v0.3.68: Android Back navigates the card' not in previous
+          entry.write_text(previous+'\n'+patch,encoding='utf-8')
+          manifest=Path('custom_components/totalplay_stb/manifest.json')
+          data=json.loads(manifest.read_text(encoding='utf-8'))
+          assert data['version']=='0.3.67'
+          data['version']='0.3.68'
+          manifest.write_text(json.dumps(data,indent=2,ensure_ascii=False)+'\n',encoding='utf-8')
+          PY
+          node --check custom_components/totalplay_stb/www/mobile-back-v0368.patch.js
+          node --check custom_components/totalplay_stb/www/totalplay-stb-v0366.js
+          python3 -m json.tool custom_components/totalplay_stb/manifest.json >/dev/null
+          echo 'PASS: Totalplay scoped mobile Back source and syntax checks'
+      - name: Commit and release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add custom_components/totalplay_stb/www/totalplay-stb-v0366.js custom_components/totalplay_stb/manifest.json
+          git commit -m 'feat: Android Back navigates Totalplay card and popup (v0.3.68)'
+          git push origin HEAD:main
+          gh release create v0.3.68 --target "$(git rev-parse HEAD)" --title v0.3.68 --notes 'Android Back closes the frontend remote, returns Apps to the TV guide, then closes the popup. Scoped same-URL history guards preserve normal Home Assistant navigation; the device remote Back command remains separate.'
