@@ -48,6 +48,10 @@ jobs:
           grep -F "TOTALPLAY ACCENT FIX v0.3.74" custom_components/totalplay_stb/www/totalplay-stb-v0374.js
           grep -F "background:transparent!important" custom_components/totalplay_stb/www/totalplay-stb-v0374.js
           grep -F "data-tp74-accent-field" custom_components/totalplay_stb/www/totalplay-stb-v0374.js
+          node --input-type=module --check < custom_components/totalplay_stb/www/totalplay-stb-v0375.js
+          grep -F "TOTALPLAY MOBILE POPUP VIEWPORT v0.3.75" custom_components/totalplay_stb/www/totalplay-stb-v0375.js
+          grep -F "visualViewport" custom_components/totalplay_stb/www/totalplay-stb-v0375.js
+          grep -F "preventScroll:true" custom_components/totalplay_stb/www/totalplay-stb-v0375.js
 
       - name: Read and validate integration version
         id: version
