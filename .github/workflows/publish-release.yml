@@ -38,6 +38,9 @@ jobs:
                       raise SystemExit(f'Missing card dependency: {module.name} -> {dependency}')
           print('Python syntax and relative JavaScript imports checked')
           PY
+          node --input-type=module --check < custom_components/totalplay_stb/www/totalplay-stb-v0372.js
+          grep -F "TOTALPLAY CORPORATE IMAGE v0.3.72" custom_components/totalplay_stb/www/totalplay-stb-v0372.js
+          grep -F -- "--tp-primary:#c52b6b" custom_components/totalplay_stb/www/totalplay-stb-v0372.js
 
       - name: Read and validate integration version
         id: version
