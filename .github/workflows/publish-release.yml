@@ -44,6 +44,10 @@ jobs:
           grep -F -- "--tp-primary:#c52b6b" custom_components/totalplay_stb/www/totalplay-stb-v0372.js
           grep -F "TOTALPLAY COOL DARK v0.3.73" custom_components/totalplay_stb/www/totalplay-stb-v0373.js
           grep -F -- "--tp65-canvas:#151B2A" custom_components/totalplay_stb/www/totalplay-stb-v0373.js
+          node --input-type=module --check < custom_components/totalplay_stb/www/totalplay-stb-v0374.js
+          grep -F "TOTALPLAY ACCENT FIX v0.3.74" custom_components/totalplay_stb/www/totalplay-stb-v0374.js
+          grep -F "background:transparent!important" custom_components/totalplay_stb/www/totalplay-stb-v0374.js
+          grep -F "data-tp74-accent-field" custom_components/totalplay_stb/www/totalplay-stb-v0374.js
 
       - name: Read and validate integration version
         id: version
