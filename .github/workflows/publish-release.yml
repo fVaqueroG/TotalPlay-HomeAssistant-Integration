@@ -39,8 +39,11 @@ jobs:
           print('Python syntax and relative JavaScript imports checked')
           PY
           node --input-type=module --check < custom_components/totalplay_stb/www/totalplay-stb-v0372.js
+          node --input-type=module --check < custom_components/totalplay_stb/www/totalplay-stb-v0373.js
           grep -F "TOTALPLAY CORPORATE IMAGE v0.3.72" custom_components/totalplay_stb/www/totalplay-stb-v0372.js
           grep -F -- "--tp-primary:#c52b6b" custom_components/totalplay_stb/www/totalplay-stb-v0372.js
+          grep -F "TOTALPLAY COOL DARK v0.3.73" custom_components/totalplay_stb/www/totalplay-stb-v0373.js
+          grep -F -- "--tp65-canvas:#151B2A" custom_components/totalplay_stb/www/totalplay-stb-v0373.js
 
       - name: Read and validate integration version
         id: version
