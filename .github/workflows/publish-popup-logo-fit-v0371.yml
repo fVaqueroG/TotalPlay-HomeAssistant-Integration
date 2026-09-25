@@ -1,0 +1,62 @@
+name: Publish Totalplay popup logo fit v0.3.71
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/publish-popup-logo-fit-v0371.yml']
+permissions:
+  contents: write
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Apply popup logo containment fix
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          import json
+          root=Path('custom_components/totalplay_stb')
+          card=root/'www'/'totalplay-stb-v0366.js'
+          source=card.read_text(encoding='utf-8')
+          patch=(root/'www'/'popup-logo-fit-v0371.patch.js').read_text(encoding='utf-8')
+          marker='/* Totalplay v0.3.71: keep the vertical popup logo fully inside its trigger. */'
+          assert marker not in source, 'v0.3.71 logo fit patch already applied'
+          card.write_text(source.rstrip()+'\n\n'+patch,encoding='utf-8')
+          manifest=root/'manifest.json'
+          data=json.loads(manifest.read_text(encoding='utf-8'))
+          assert data['version']=='0.3.70',data['version']
+          data['version']='0.3.71'
+          manifest.write_text(json.dumps(data,indent=2,ensure_ascii=False)+'\n',encoding='utf-8')
+          PY
+          node --check custom_components/totalplay_stb/www/popup-logo-fit-v0371.patch.js
+          node --check custom_components/totalplay_stb/www/totalplay-stb-v0366.js
+          python3 -m json.tool custom_components/totalplay_stb/manifest.json >/dev/null
+      - name: Test popup logo is contained and not scaled past its wrapper
+        run: |
+          node - <<'JS'
+          const fs=require('node:fs'),assert=require('node:assert/strict');
+          const patch=fs.readFileSync('custom_components/totalplay_stb/www/popup-logo-fit-v0371.patch.js','utf8');
+          assert(patch.includes('height:100px !important'),'Vertical logo has a contained 100px height');
+          assert(patch.includes('max-height:100px !important'),'Vertical logo maximum matches contained height');
+          assert(patch.includes('max-width:calc(100% - 16px) !important'),'Logo keeps horizontal safety margin');
+          assert(patch.includes('object-fit:contain !important'),'Logo preserves its full artwork');
+          assert(patch.includes('object-position:center !important'),'Logo stays centered');
+          assert(patch.includes('transform:none !important'),'Legacy 1.45 scale is explicitly cancelled');
+          assert(patch.includes('overflow:visible !important'),'Logo wrapper no longer crops the contained artwork');
+          assert(!/transform\s*:\s*scale\(/.test(patch),'New release layer does not enlarge logo beyond its box');
+          const full=fs.readFileSync('custom_components/totalplay_stb/www/totalplay-stb-v0366.js','utf8');
+          assert(full.includes('/* Totalplay v0.3.71: keep the vertical popup logo fully inside its trigger. */'));
+          console.log('PASS: Totalplay vertical popup logo is centered, contained, and not cropped');
+          JS
+      - name: Publish tested popup logo fix
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add custom_components/totalplay_stb/www/totalplay-stb-v0366.js custom_components/totalplay_stb/manifest.json
+          git commit -m 'fix: keep Totalplay popup logo fully visible (v0.3.71)'
+          git push origin HEAD:main
+          gh release create v0.3.71 --target "$(git rev-parse HEAD)" --title v0.3.71 --notes 'Fix the vertical Totalplay popup-card logo being visually trimmed. The current release layer cancels the legacy 1.45x scale, centers the complete logo with object-fit contain, and keeps a safety margin inside the existing 120px trigger. Popup dimensions and behavior are unchanged.'
